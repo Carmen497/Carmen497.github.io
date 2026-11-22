@@ -37,6 +37,7 @@ export const DEFAULT_READER = {
   showChapter: true,
   showTimeLeft: true,
   keepAwake: true,
+  fullscreen: true,
   publisherStyles: false,
   tapZones: 'sides',
 };

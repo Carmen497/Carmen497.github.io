@@ -33,11 +33,14 @@ function themeColors(s) {
 }
 
 function userCss(s) {
-  const { fg, accent } = themeColors(s);
+  const { bg, fg, accent } = themeColors(s);
   const font = s.font === 'original' ? null : (s.font === 'system-ui' ? 'system-ui, sans-serif' : `'${s.font}', Georgia, serif`);
   const textSel = 'body, p, div, span, li, blockquote, td, dd, dt, section, article';
   return `
-    html, body { background: transparent !important; }
+    html, body { background: ${bg} !important; }
+    /* Muchos libros pintan cajas blancas (o de color) dentro del texto: se quitan para que mande el tema */
+    body *:not(img):not(svg):not(image):not(video):not(canvas) { background-color: transparent !important; background-image: none !important; border-color: ${fg}33 !important; box-shadow: none !important; }
+    body *:not(a) { color: ${fg} !important; }
     html { color: ${fg} !important; }
     body { color: ${fg} !important; font-size: ${s.fontSize}px !important; letter-spacing: ${s.letterSpacing}em; -webkit-font-smoothing: antialiased; }
     ${textSel} { color: ${fg} !important; line-height: ${s.lineHeight} !important; ${font ? `font-family: ${font} !important;` : ''} }
@@ -87,6 +90,7 @@ export async function renderReader(root, bookId) {
   root.append(shell);
 
   let uiVisible = false;
+  let closed = false;
   const setUi = (v) => { uiVisible = v; shell.classList.toggle('ui', v); };
 
   // ---- Libro ----
@@ -259,6 +263,7 @@ export async function renderReader(root, bookId) {
     handleTap(x);
   }
   function handleTap(x) {
+    enterFullscreen();
     if (uiVisible) return setUi(false);
     if (s.flow === 'scroll') return setUi(true);
     if (s.tapZones === 'next') {
@@ -331,6 +336,16 @@ export async function renderReader(root, bookId) {
   }
   requestWake();
 
+  // ---- Pantalla completa (oculta las barras del sistema mientras se lee) ----
+  // Necesita un toque reciente: se pide al abrir el libro y, si se perdió, en el siguiente toque.
+  function enterFullscreen() {
+    if (!s.fullscreen || closed || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  }
+  function exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
+  enterFullscreen();
+  shell.addEventListener('pointerup', enterFullscreen);
+
   // ---- Marcadores e índice ----
   function toggleBookmark() {
     if (!currentLoc) return;
@@ -374,6 +389,7 @@ export async function renderReader(root, bookId) {
     const set = async (patch, rebuild = false) => {
       Object.assign(s, patch);
       await saveReaderSettings(s);
+      if ('fullscreen' in patch) { patch.fullscreen ? enterFullscreen() : exitFullscreen(); return; }
       if (rebuild) { const cfi = currentLoc?.start?.cfi; applyLook(); await build(cfi); }
       else await refreshStyles();
     };
@@ -444,6 +460,7 @@ export async function renderReader(root, bookId) {
       toggle('Mostrar progreso', 'showProgress'),
       toggle('Tiempo restante estimado', 'showTimeLeft'),
       toggle('Mantener pantalla encendida', 'keepAwake'),
+      toggle('Pantalla completa', 'fullscreen'),
     );
     sheet(body, { title: 'Ajustes de lectura', cls: 'clear-backdrop', tall: true });
   }
@@ -465,7 +482,6 @@ export async function renderReader(root, bookId) {
   }
 
   // ---- Cerrar ----
-  let closed = false;
   async function close() {
     if (closed) return;
     closed = true;
@@ -493,6 +509,7 @@ export async function renderReader(root, bookId) {
     clearTimeout(saveTimer);
     putBook(book);
     wake?.release().catch(() => {});
+    exitFullscreen();
     rendition?.destroy();
     epub.destroy();
     document.body.classList.remove('reading');
