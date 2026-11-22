@@ -44,10 +44,13 @@ export async function renderSettings(root) {
     genreList.innerHTML = '';
     for (const g of genres) {
       const color = h('input', { type: 'color', value: g.color, class: 'color-input' });
-      color.addEventListener('change', () => { g.color = color.value; saveGenres(genres); });
+      const dot = h('label', { class: 'genre-dot', style: { background: g.color } }, color);
+      // El círculo cambia mientras eliges; al cerrar el selector se guarda
+      color.addEventListener('input', () => { g.color = color.value; dot.style.background = g.color; });
+      color.addEventListener('change', () => { g.color = color.value; dot.style.background = g.color; saveGenres(genres); toast('Color guardado'); });
       const n = books.filter((b) => b.genre === g.id).length;
       genreList.append(h('div', { class: 'genre-row' },
-        h('label', { class: 'genre-dot', style: { background: g.color } }, color),
+        dot,
         h('span', { class: 'grow' }, g.name, h('span', { class: 'muted small' }, ` · ${n}`)),
         h('button', { class: 'icon-btn', title: 'Renombrar', onclick: async () => { const name = await promptDialog('Nombre del género', g.name); if (name) { g.name = name; await saveGenres(genres); drawGenres(); } } }, icon('edit', 18)),
         h('button', { class: 'icon-btn', title: 'Eliminar', onclick: async () => {
