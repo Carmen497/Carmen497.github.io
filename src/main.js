@@ -124,7 +124,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   setupLaunchQueue();
   setupDropZone();
   const params = new URLSearchParams(location.search);
-  if (params.has('compartido')) history.replaceState(null, '', location.pathname + location.hash);
+  // El APK abre la web con ?apk=1: allí Android ya oculta las barras, sin el aviso del navegador
+  if (params.has('apk')) { try { localStorage.setItem('enApk', '1'); } catch {} }
+  if (params.has('compartido') || params.has('apk')) history.replaceState(null, '', location.pathname + location.hash);
   await route();
   await processInbox();
   navigator.storage?.persist?.();

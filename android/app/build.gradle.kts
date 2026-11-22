@@ -28,7 +28,7 @@ android {
         versionName = providers.gradleProperty("apkVersionName").get()
 
         manifestPlaceholders["hostName"] = host
-        manifestPlaceholders["defaultUrl"] = startUrl
+        manifestPlaceholders["defaultUrl"] = "$startUrl?apk=1"
 
         // Vínculo con la web (assetlinks.json): así se abre a pantalla completa, sin barra del navegador
         resValue("string", "asset_statements", res(

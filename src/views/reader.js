@@ -340,7 +340,13 @@ export async function renderReader(root, bookId) {
   // Necesita un toque reciente: se pide al abrir el libro y, si se perdió, en el siguiente toque.
   function enterFullscreen() {
     if (!s.fullscreen || closed || document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+    // En el APK la app ya ocupa toda la pantalla (modo inmersivo): pedirla otra vez solo saca el aviso de Chrome
+    if (inApk()) return;
     document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  }
+  function inApk() {
+    try { if (localStorage.getItem('enApk')) return true; } catch {}
+    return document.referrer.startsWith('android-app://');
   }
   function exitFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
   enterFullscreen();
@@ -442,7 +448,7 @@ export async function renderReader(root, bookId) {
       slider('Luz cálida', 'warmth', 0, 100, 1, (v) => `${v}%`),
       h('h3', { class: 'rset-h' }, 'Texto'),
       h('div', { class: 'rset-row' }, h('span', { class: 'rset-label' }, 'Letra'), fontSel),
-      slider('Tamaño', 'fontSize', 12, 36, 1, (v) => `${v}px`),
+      slider('Tamaño', 'fontSize', 12, 48, 1, (v) => `${v}px`),
       slider('Interlineado', 'lineHeight', 1.1, 2.4, 0.05, (v) => v.toFixed(2)),
       slider('Entre párrafos', 'paraSpacing', 0, 2, 0.1, (v) => `${v.toFixed(1)}`),
       slider('Espacio letras', 'letterSpacing', -0.03, 0.12, 0.005, (v) => v.toFixed(3)),
