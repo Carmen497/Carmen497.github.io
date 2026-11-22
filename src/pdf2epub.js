@@ -118,7 +118,10 @@ export async function pdfToEpub(file, onProgress = () => {}) {
       const bigGap = prev && prev.y - l.y > lineGap * 1.45;
       const indented = l.x - leftMargin > bodySize * 0.8;
       const prevShort = prev && prev.right < rightEdge - bodySize * 3 && /[.!?:»"”)]$/.test(prev.text);
-      if (!prev && pIdx > 0) {
+      // Una línea que empieza con raya de diálogo tras una frase terminada es otra intervención
+      const newDialogue = /^[—―–]\s?[¿¡«"“A-ZÁÉÍÓÚÑÜ]/.test(l.text) && /[.?!…»"”]$/.test(para.trim());
+      if (newDialogue) flush();
+      else if (!prev && pIdx > 0) {
         // Continuación desde la página anterior
         if (indented) flush();
       } else if (bigGap || indented || prevShort) flush();

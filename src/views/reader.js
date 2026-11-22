@@ -45,6 +45,43 @@ function themeColors(s) {
   return { bg: t.bg || s.customBg, fg: t.fg || s.customFg, accent: t.accent };
 }
 
+// Libros mal maquetados (o convertidos de PDF) que pegan varios diálogos en un mismo párrafo:
+// «…bien? —Es… él es…». Cuando una raya de diálogo empieza frase tras un punto, interrogación o
+// exclamación, se abre línea nueva. Se hace dentro del mismo párrafo (sin crear párrafos nuevos)
+// para no mover las posiciones guardadas del resto del capítulo.
+const DLG = /([.?!…»”"])[  ]+(?=[—―–][  ]?[¿¡«"“A-ZÁÉÍÓÚÑÜ])/g;
+function splitDialogues(doc) {
+  const body = doc.body;
+  if (!body || body.dataset.rinconDlg) return;
+  body.dataset.rinconDlg = '1';
+  const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  const hits = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n.parentElement?.closest('pre, code, h1, h2, h3, h4, h5, h6, script, style, a, rt')) continue;
+    DLG.lastIndex = 0;
+    if (DLG.test(n.data)) hits.push(n);
+  }
+  for (const n of hits) {
+    const frag = doc.createDocumentFragment();
+    let last = 0;
+    DLG.lastIndex = 0;
+    for (let m; (m = DLG.exec(n.data));) {
+      frag.append(n.data.slice(last, m.index + m[1].length));
+      const br = doc.createElement('span'); br.className = 'rincon-pb';
+      const ind = doc.createElement('span'); ind.className = 'rincon-ind';
+      frag.append(br, ind);
+      last = m.index + m[0].length;
+    }
+    frag.append(n.data.slice(last));
+    n.replaceWith(frag);
+  }
+}
+// La sangría de las líneas separadas copia la del párrafo
+function fitDialogueIndent(doc) {
+  const ps = new Set([...doc.querySelectorAll('.rincon-ind')].map((x) => x.parentElement));
+  for (const p of ps) if (p) p.style.setProperty('--rincon-ti', doc.defaultView.getComputedStyle(p).textIndent);
+}
+
 // Tres :not(#…) dan a la regla de la letra el peso de tres ids, más que casi cualquier regla de un libro
 const ID3 = ':not(#rx1):not(#rx2):not(#rx3) ';
 
@@ -79,6 +116,8 @@ function userCss(s) {
         ${s.indent ? '' : 'text-indent: 0 !important;'} hyphens: ${s.hyphens ? 'auto' : 'manual'} !important; -webkit-hyphens: ${s.hyphens ? 'auto' : 'manual'} !important; }
     a, a * { color: ${accent} !important; }
     img, svg, video { max-width: 100% !important; height: auto; }
+    .rincon-pb { display: block !important; height: ${s.paraSpacing}em; }
+    .rincon-ind { display: inline-block !important; width: var(--rincon-ti, 0); }
     ::selection { background: ${accent}55; }
   `;
 }
@@ -172,6 +211,8 @@ export async function renderReader(root, bookId) {
     if (!st) { st = doc.createElement('style'); st.id = 'rincon-user'; doc.head.append(st); }
     st.textContent = userCss(s);
     forceInlineFont(doc, fontStack(s.font));
+    splitDialogues(doc);
+    fitDialogueIndent(doc);
     doc.documentElement.lang ||= book.language || 'es';
   }
 
