@@ -317,7 +317,44 @@ body.reading #toast { bottom: 80px; }
 .wood-sheet .pill { background: rgba(255,255,255,.14); color: #fff3e2; }
 .wood-sheet .select { background: rgba(0,0,0,.25); color: #fff; border-color: rgba(255,255,255,.2); }
 .wood-sheet .empty-state { color: #e7d2b8; }
-.shelf-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.shelf-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+
+/* La estantería abierta ocupa toda la pantalla y «crece» desde donde se tocó */
+.sheet-backdrop .sheet.bookcase {
+  max-width: none; max-height: none; height: 100dvh; border-radius: 0;
+  padding-top: var(--safe-t);
+  transform: scale(.12); opacity: 0;
+  transition: transform .38s cubic-bezier(.2, .8, .25, 1), opacity .22s ease;
+}
+.sheet-backdrop.open .sheet.bookcase { transform: none; opacity: 1; }
+.sheet-backdrop:has(.bookcase) { align-items: stretch; }
+.bookcase .sheet-grip { display: none; }
+.bookcase .sheet-head { cursor: default; padding-top: 14px; }
+.bookcase .sheet-title { font-size: 1.4rem; font-family: 'Lora', serif; }
+.bookcase .sheet-body { padding: 4px 14px 28px; }
+.case {
+  max-width: 900px; margin: 0 auto;
+  border: 12px solid #7a4e32; border-top-width: 16px; border-radius: 6px;
+  background: #2e1d13;
+  box-shadow: 0 12px 28px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.case-row {
+  position: relative; min-height: 150px;
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 10px;
+  align-items: end; padding: 26px 12px 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,0) 40%), #3b2619;
+  border-bottom: 14px solid #8a5a3b;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,.08), 0 6px 8px -4px rgba(0,0,0,.5);
+}
+.case-row:last-child { border-bottom-width: 18px; }
+.case-row.empty { display: block; padding-top: 8px; }
+.case-row .plank-book { width: 100%; height: auto; aspect-ratio: 2 / 3; margin-bottom: 0; }
+.case-plate {
+  position: absolute; top: 4px; left: 12px; max-width: calc(100% - 24px);
+  padding: 1px 10px; border-radius: 3px; font-size: .72rem; font-weight: 800; letter-spacing: .02em;
+  color: #3b2414; background: linear-gradient(#f1d58f, #c9a253); box-shadow: 0 1px 2px rgba(0,0,0,.5);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .plank-group { margin-top: 14px; }
 .plank-title { font-size: .95rem; color: #ffe5c2; margin-bottom: 8px; min-height: 2px; }
 .plank {

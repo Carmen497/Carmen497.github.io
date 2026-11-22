@@ -171,7 +171,7 @@ async function roomView(container, nav) {
     if (!edit) {
       const it = id && room.items.find((i) => i.id === id);
       if (it?.type === 'shelf') {
-        openShelf(it.id, { onChange: async () => { books = await getBooks(); Object.assign(room, await getRoom()); draw(); } });
+        openShelf(it.id, { origin: { x: e.clientX, y: e.clientY }, onChange: async () => { books = await getBooks(); Object.assign(room, await getRoom()); draw(); } });
       } else if (it?.type === 'cat') {
         toast(['Miau 🐾', 'Prrrr…', '¿Lees un capítulo más?', 'Zzz…'][Math.floor(Math.random() * 4)]);
       } else if (it?.type === 'clock') {

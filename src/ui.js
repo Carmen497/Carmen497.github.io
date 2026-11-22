@@ -137,8 +137,9 @@ export function confirmDialog(message, { ok = 'Aceptar', cancel = 'Cancelar', da
     const s = sheet(h('div', { class: 'dialog' },
       h('p', {}, message),
       h('div', { class: 'row end gap' },
-        btn(cancel, () => { s.close(); resolve(false); }, 'ghost'),
-        btn(ok, () => { s.close(); resolve(true); }, danger ? 'danger' : 'primary'))),
+        // Primero se responde y luego se cierra (al cerrar se responde «no» si aún no se respondió)
+        btn(cancel, () => { resolve(false); s.close(); }, 'ghost'),
+        btn(ok, () => { resolve(true); s.close(); }, danger ? 'danger' : 'primary'))),
     { onClose: () => resolve(false) });
   });
 }
@@ -146,12 +147,12 @@ export function confirmDialog(message, { ok = 'Aceptar', cancel = 'Cancelar', da
 export function promptDialog(message, value = '', { ok = 'Guardar', placeholder = '' } = {}) {
   return new Promise((resolve) => {
     const input = h('input', { class: 'input', value, placeholder });
-    const done = () => { s.close(); resolve(input.value.trim()); };
+    const done = () => { resolve(input.value.trim()); s.close(); };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(); });
     const s = sheet(h('div', { class: 'dialog' },
       h('label', { class: 'label' }, message), input,
       h('div', { class: 'row end gap' },
-        btn('Cancelar', () => { s.close(); resolve(null); }, 'ghost'),
+        btn('Cancelar', () => { resolve(null); s.close(); }, 'ghost'),
         btn(ok, done, 'primary'))),
     { onClose: () => resolve(null) });
     setTimeout(() => input.focus(), 260);
