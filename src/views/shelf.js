@@ -1,7 +1,7 @@
 // Estantería abierta: sus libros, agrupados por saga.
 import { h, icon, btn, sheet, promptDialog, toast, escapeHtml } from '../ui.js';
 import { getBooks, putBook } from '../db.js';
-import { getRoom, saveRoom, getGenres, sortBooksForShelf, coverUrl } from '../store.js';
+import { getRoom, saveRoom, getGenres, coverUrl, booksForShelves, AUTO_RULES, ruleLabel } from '../store.js';
 import { openBook } from './book.js';
 
 export async function openShelf(shelfId, { onChange } = {}) {
@@ -12,9 +12,20 @@ export async function openShelf(shelfId, { onChange } = {}) {
   const s = sheet(body, { title: shelf.name || 'Estantería', tall: true, cls: 'wood-sheet', onClose: () => onChange?.() });
 
   async function draw() {
-    const books = sortBooksForShelf((await getBooks()).filter((b) => b.shelfId === shelfId));
     const genres = await getGenres();
+    const books = booksForShelves(room.items, await getBooks())[shelfId] || [];
     body.innerHTML = '';
+
+    // Qué enseña esta estantería
+    const ruleSel = h('select', { class: 'select small' },
+      AUTO_RULES.map(([v, l]) => h('option', { value: v, selected: (shelf.auto || '') === v }, l)),
+      h('optgroup', { label: 'Un género' }, genres.map((g) => h('option', { value: `g:${g.id}`, selected: shelf.auto === `g:${g.id}` }, g.name))));
+    ruleSel.addEventListener('change', async () => {
+      shelf.auto = ruleSel.value;
+      await saveRoom(room);
+      toast(shelf.auto ? 'Esta estantería se llenará sola' : 'Ahora guarda los libros que pongas tú');
+      draw();
+    });
 
     const genreSel = h('select', { class: 'select small' },
       h('option', { value: '' }, 'Ninguno'),
@@ -25,11 +36,15 @@ export async function openShelf(shelfId, { onChange } = {}) {
       h('span', { class: 'muted' }, `${books.length} libro${books.length === 1 ? '' : 's'}`),
       h('div', { class: 'row gap wrap' },
         h('button', { class: 'pill', onclick: rename }, icon('edit', 16), 'Renombrar'),
-        h('label', { class: 'pill' }, 'Género: ', genreSel),
-        h('button', { class: 'pill', onclick: addBooks }, icon('plus', 16), 'Traer libros'))));
+        h('label', { class: 'pill' }, 'Muestra: ', ruleSel),
+        shelf.auto ? null : h('label', { class: 'pill' }, 'Libros nuevos de: ', genreSel),
+        shelf.auto ? null : h('button', { class: 'pill', onclick: addBooks }, icon('plus', 16), 'Traer libros'))));
 
     if (!books.length) {
-      body.append(h('div', { class: 'empty-state' }, h('p', {}, 'Esta estantería está vacía.'), btn('Traer libros aquí', addBooks, 'primary')));
+      body.append(h('div', { class: 'empty-state' },
+        shelf.auto
+          ? h('p', {}, `Aún no tienes libros que encajen aquí («${ruleLabel(shelf.auto, genres)}»). Aparecerán solos.`)
+          : [h('p', {}, 'Esta estantería está vacía.'), btn('Traer libros aquí', addBooks, 'primary')]));
       return;
     }
     // Agrupar por saga

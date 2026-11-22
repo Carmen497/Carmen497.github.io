@@ -80,7 +80,7 @@ export async function openBook(id, { onChange } = {}) {
     sagaNum.addEventListener('input', () => { book.sagaIndex = sagaNum.value === '' ? null : parseFloat(sagaNum.value); save(); });
 
     // Estantería
-    const shelfSel = h('select', { class: 'select' }, room.items.filter((i) => i.type === 'shelf').map((sh) => h('option', { value: sh.id, selected: book.shelfId === sh.id }, sh.name)));
+    const shelfSel = h('select', { class: 'select' }, room.items.filter((i) => i.type === 'shelf' && !i.auto).map((sh) => h('option', { value: sh.id, selected: book.shelfId === sh.id }, sh.name)));
     shelfSel.addEventListener('change', () => { book.shelfId = shelfSel.value; save(); });
 
     body.append(

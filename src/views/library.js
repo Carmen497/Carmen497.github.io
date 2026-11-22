@@ -2,7 +2,7 @@
 import { h, icon, iconBtn, btn, toast, sheet, promptDialog, confirmDialog, escapeHtml } from '../ui.js';
 import { getBooks, putBook } from '../db.js';
 import {
-  getRoom, saveRoom, getGenres, genreById, getAppSettings, saveAppSettings, sortBooksForShelf, coverUrl,
+  getRoom, saveRoom, getGenres, genreById, getAppSettings, saveAppSettings, sortBooksForShelf, coverUrl, booksForShelves,
 } from '../store.js';
 import {
   renderRoom, roomViewBox, screenToFloor, screenToWall, CATALOG, catalogOf, canPlace, canPlaceWall,
@@ -63,12 +63,7 @@ async function roomView(container, nav) {
 
   let edit = false, selectedId = null, placing = null;
 
-  const booksByShelf = () => {
-    const map = {};
-    for (const b of books) (map[b.shelfId] ||= []).push(b);
-    for (const k in map) map[k] = sortBooksForShelf(map[k]);
-    return map;
-  };
+  const booksByShelf = () => booksForShelves(room.items, books);
 
   // ---- Vista (zoom y desplazamiento) ----
   const base = roomViewBox(room.size);
@@ -332,7 +327,7 @@ async function roomView(container, nav) {
   async function remove(it) {
     if (it.type === 'shelf') {
       const n = books.filter((b) => b.shelfId === it.id).length;
-      const others = room.items.filter((i) => i.type === 'shelf' && i.id !== it.id);
+      const others = room.items.filter((i) => i.type === 'shelf' && i.id !== it.id).sort((a, b) => !!a.auto - !!b.auto);
       if (!others.length) return toast('Necesitas al menos una estantería');
       if (n && !(await confirmDialog(`Esta estantería tiene ${n} libro(s). Se moverán a «${others[0].name}».`, { ok: 'Quitar', danger: true }))) return;
       for (const b of books.filter((b) => b.shelfId === it.id)) { b.shelfId = others[0].id; await putBook(b); }

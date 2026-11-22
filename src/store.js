@@ -58,8 +58,8 @@ export function defaultRoom() {
     floor: 'wood',
     items: [
       { id: 'shelf-1', type: 'shelf', x: 1, y: 0, rot: 0, name: 'Mis favoritos', genre: '', color: '#8a5a3b' },
-      { id: 'shelf-2', type: 'shelf', x: 4, y: 0, rot: 0, name: 'Pendientes', genre: '', color: '#8a5a3b' },
-      { id: 'shelf-3', type: 'shelf', x: 0, y: 3, rot: 1, name: 'Sagas', genre: '', color: '#8a5a3b' },
+      { id: 'shelf-2', type: 'shelf', x: 4, y: 0, rot: 0, name: 'Pendientes', genre: '', auto: 'pendiente', color: '#8a5a3b' },
+      { id: 'shelf-3', type: 'shelf', x: 0, y: 3, rot: 1, name: 'Sagas', genre: '', auto: 'saga', color: '#8a5a3b' },
       { id: 'win-1', type: 'window', wall: 'b', p: 6 },
       { id: 'paint-1', type: 'painting', wall: 'a', p: 1, color: '#6d9a8b' },
       { id: 'clock-1', type: 'clock', wall: 'b', p: 3 },
@@ -74,7 +74,17 @@ export function defaultRoom() {
 }
 
 let cache = {};
-export async function getRoom() { return cache.room ||= await kvGet('room', defaultRoom()); }
+export async function getRoom() {
+  if (cache.room) return cache.room;
+  const room = await kvGet('room', defaultRoom());
+  // Salas antiguas: las estanterías «Pendientes» y «Sagas» de serie pasan a llenarse solas
+  for (const it of room.items) {
+    if (it.type !== 'shelf' || it.auto !== undefined) continue;
+    const n = (it.name || '').trim().toLowerCase();
+    it.auto = n === 'pendientes' ? 'pendiente' : n === 'sagas' ? 'saga' : '';
+  }
+  return cache.room = room;
+}
 export async function saveRoom(room) { cache.room = room; await kvSet('room', room); }
 
 export async function getGenres() { return cache.genres ||= await kvGet('genres', DEFAULT_GENRES); }
@@ -95,9 +105,50 @@ export async function shelves() {
   return (await getRoom()).items.filter((i) => i.type === 'shelf');
 }
 
+// ---- Estanterías automáticas ----
+// Una estantería puede guardar los libros que tú pones (auto = '') o enseñar sola los que cumplen una regla.
+export const AUTO_RULES = [
+  ['', 'Los libros que yo ponga'],
+  ['pendiente', 'Pendientes (sin terminar)'],
+  ['leyendo', 'Leyendo ahora'],
+  ['leido', 'Leídos'],
+  ['favoritos', 'Favoritos (4 ★ o más)'],
+  ['saga', 'Libros de sagas'],
+];
+export function ruleLabel(auto, genres = []) {
+  if (auto?.startsWith('g:')) return `Género: ${genreById(genres, auto.slice(2))?.name || '—'}`;
+  return AUTO_RULES.find(([v]) => v === auto)?.[1] || '';
+}
+function matchesRule(b, auto) {
+  switch (auto) {
+    case 'pendiente': return b.status !== 'leido' && b.status !== 'abandonado';
+    case 'leyendo': return b.status === 'leyendo';
+    case 'leido': return b.status === 'leido';
+    case 'favoritos': return (b.rating || 0) >= 4;
+    case 'saga': return !!b.saga;
+    default: return auto?.startsWith('g:') ? b.genre === auto.slice(2) : false;
+  }
+}
+// Libros que se ven en cada estantería. Los que no tienen una estantería «normal» válida
+// se muestran en la primera estantería normal, para que ningún libro se quede fuera de la sala.
+export function booksForShelves(items, books) {
+  const list = items.filter((i) => i.type === 'shelf');
+  const manual = list.filter((s) => !s.auto);
+  const manualIds = new Set(manual.map((s) => s.id));
+  const map = {};
+  for (const s of list) map[s.id] = [];
+  for (const b of books) {
+    const home = manualIds.has(b.shelfId) ? b.shelfId : manual[0]?.id;
+    if (home) map[home].push(b);
+  }
+  for (const s of list) if (s.auto) map[s.id] = books.filter((b) => matchesRule(b, s.auto));
+  for (const k in map) map[k] = sortBooksForShelf(map[k]);
+  return map;
+}
+
 // Elige la estantería para un libro nuevo: la de su género, o la primera con hueco.
 export async function pickShelf(book) {
-  const list = await shelves();
+  const list = (await shelves()).filter((s) => !s.auto);
   if (!list.length) return '';
   if (book.genre) {
     const byGenre = list.find((s) => s.genre === book.genre);
