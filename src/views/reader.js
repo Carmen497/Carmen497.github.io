@@ -45,6 +45,21 @@ function themeColors(s) {
   return { bg: t.bg || s.customBg, fg: t.fg || s.customFg, accent: t.accent };
 }
 
+// Tres :not(#…) dan a la regla de la letra el peso de tres ids, más que casi cualquier regla de un libro
+const ID3 = ':not(#rx1):not(#rx2):not(#rx3) ';
+
+// Letra escrita directamente en los párrafos (style="font-family:…"): se cambia también, y se recuerda la del libro
+function forceInlineFont(doc, font) {
+  for (const el of doc.body?.querySelectorAll('[style*="font"], [data-rincon-ff]') || []) {
+    if (!('rinconFf' in el.dataset)) {
+      if (!el.style.fontFamily) continue;
+      el.dataset.rinconFf = el.style.fontFamily;
+    }
+    if (font) el.style.setProperty('font-family', font, 'important');
+    else el.style.fontFamily = el.dataset.rinconFf;
+  }
+}
+
 function userCss(s) {
   const { bg, fg, accent } = themeColors(s);
   const font = fontStack(s.font);
@@ -59,7 +74,7 @@ function userCss(s) {
     ${textSel} { color: ${fg} !important; line-height: ${s.lineHeight} !important; ${font ? `font-family: ${font} !important;` : ''} }
     h1, h2, h3, h4, h5, h6 { color: ${fg} !important; ${font ? `font-family: ${font} !important;` : ''} line-height: 1.3 !important; }
     /* Muchos libros fijan su propia letra con reglas fuertes: el :not(#…) da a esta regla prioridad de id para que mande la elegida */
-    ${font ? `body:not(#rincon-x), body *:not(#rincon-x):not(code):not(pre):not(kbd):not(samp) { font-family: ${font} !important; }` : ''}
+    ${font ? `${ID3}body, ${ID3}body *:not(code):not(pre):not(kbd):not(samp) { font-family: ${font} !important; }` : ''}
     p { margin-top: 0 !important; margin-bottom: ${s.paraSpacing}em !important; text-align: ${s.align} !important;
         ${s.indent ? '' : 'text-indent: 0 !important;'} hyphens: ${s.hyphens ? 'auto' : 'manual'} !important; -webkit-hyphens: ${s.hyphens ? 'auto' : 'manual'} !important; }
     a, a * { color: ${accent} !important; }
@@ -156,6 +171,7 @@ export async function renderReader(root, bookId) {
     let st = doc.getElementById('rincon-user');
     if (!st) { st = doc.createElement('style'); st.id = 'rincon-user'; doc.head.append(st); }
     st.textContent = userCss(s);
+    forceInlineFont(doc, fontStack(s.font));
     doc.documentElement.lang ||= book.language || 'es';
   }
 
