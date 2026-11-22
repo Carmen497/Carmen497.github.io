@@ -1,5 +1,5 @@
 // Lector EPUB con ajustes de lectura, barra de estado y registro de estadísticas.
-import ePub from 'epubjs';
+import ePub, { EpubCFI } from 'epubjs';
 import { h, icon, iconBtn, sheet, toast, stars, fmtDuration, todayKey, closeAllSheets } from '../ui.js';
 import { getBook, putBook, getFile, addDay } from '../db.js';
 import { getReaderSettings, saveReaderSettings } from '../store.js';
@@ -51,9 +51,10 @@ function themeColors(s) {
 // para no mover las posiciones guardadas del resto del capítulo.
 const DLG = /([.?!…»”"])[  ]+(?=[—―–][  ]?[¿¡«"“A-ZÁÉÍÓÚÑÜ])/g;
 function splitDialogues(doc) {
-  const body = doc.body;
-  if (!body || body.dataset.rinconDlg) return;
-  body.dataset.rinconDlg = '1';
+  const body = doc.body || doc.querySelector('body');
+  if (!body || body.hasAttribute('data-rincon-dlg')) return;
+  body.setAttribute('data-rincon-dlg', '1');
+  const span = (cls) => { const e = doc.createElementNS('http://www.w3.org/1999/xhtml', 'span'); e.setAttribute('class', cls); return e; };
   const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT);
   const hits = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -67,19 +68,12 @@ function splitDialogues(doc) {
     DLG.lastIndex = 0;
     for (let m; (m = DLG.exec(n.data));) {
       frag.append(n.data.slice(last, m.index + m[1].length));
-      const br = doc.createElement('span'); br.className = 'rincon-pb';
-      const ind = doc.createElement('span'); ind.className = 'rincon-ind';
-      frag.append(br, ind);
+      frag.append(span('rincon-pb'), span('rincon-ind'));
       last = m.index + m[0].length;
     }
     frag.append(n.data.slice(last));
     n.replaceWith(frag);
   }
-}
-// La sangría de las líneas separadas copia la del párrafo
-function fitDialogueIndent(doc) {
-  const ps = new Set([...doc.querySelectorAll('.rincon-ind')].map((x) => x.parentElement));
-  for (const p of ps) if (p) p.style.setProperty('--rincon-ti', doc.defaultView.getComputedStyle(p).textIndent);
 }
 
 // Tres :not(#…) dan a la regla de la letra el peso de tres ids, más que casi cualquier regla de un libro
@@ -117,7 +111,9 @@ function userCss(s) {
     a, a * { color: ${accent} !important; }
     img, svg, video { max-width: 100% !important; height: auto; }
     .rincon-pb { display: block !important; height: ${s.paraSpacing}em; }
-    .rincon-ind { display: inline-block !important; width: var(--rincon-ti, 0); }
+    /* La sangría de las líneas separadas copia la del párrafo (text-indent heredado) */
+    .rincon-ind { display: inline-block !important; text-indent: inherit; }
+    .rincon-ind::before { content: '\\200B'; }
     ::selection { background: ${accent}55; }
   `;
 }
@@ -164,6 +160,9 @@ export async function renderReader(root, bookId) {
 
   // ---- Libro ----
   const epub = ePub(await file.arrayBuffer());
+  // Los diálogos se separan al cargar cada capítulo, antes de maquetarlo: así no cambia de tamaño
+  // ya mostrado (eso hacía que la página «se recargara» al pasarla) y las posiciones cuadran
+  epub.spine.hooks.content.register((doc) => splitDialogues(doc));
   let rendition = null;
   let toc = [];
   let currentLoc = null;
@@ -200,6 +199,24 @@ export async function renderReader(root, bookId) {
   }
 
   const fontsHref = new URL('fonts/fonts.css', document.baseURI).href;
+  // El estilo del lector va dentro de cada capítulo desde que se carga. epub.js solo lo aplica
+  // después de colocar la página: el texto se recolocaba ya a la vista (parecía que la página
+  // «se recargaba» al cambiar de capítulo) y al reabrir el libro aparecía unas páginas antes.
+  const XHTML = 'http://www.w3.org/1999/xhtml';
+  epub.spine.hooks.content.register((doc) => {
+    const head = doc.querySelector('head');
+    if (!head) return;
+    const link = doc.createElementNS(XHTML, 'link');
+    link.setAttribute('id', 'rincon-fonts'); link.setAttribute('rel', 'stylesheet'); link.setAttribute('href', fontsHref);
+    const st = doc.createElementNS(XHTML, 'style');
+    st.setAttribute('id', 'rincon-user');
+    st.textContent = userCss(s);
+    head.append(link, st);
+  });
+  // Capítulos ya cargados: que lleven el estilo actual la próxima vez que se muestren
+  function restyleLoadedSections() {
+    epub.spine.each((sec) => { const st = sec.document?.getElementById?.('rincon-user'); if (st) st.textContent = userCss(s); });
+  }
   function styleContents(contents) {
     const doc = contents.document;
     if (!doc.getElementById('rincon-fonts')) {
@@ -211,8 +228,6 @@ export async function renderReader(root, bookId) {
     if (!st) { st = doc.createElement('style'); st.id = 'rincon-user'; doc.head.append(st); }
     st.textContent = userCss(s);
     forceInlineFont(doc, fontStack(s.font));
-    splitDialogues(doc);
-    fitDialogueIndent(doc);
     doc.documentElement.lang ||= book.language || 'es';
   }
 
@@ -234,8 +249,42 @@ export async function renderReader(root, bookId) {
     rendition.on('touchend', onTouchEnd);
     rendition.on('keyup', onKey);
     rendition.on('mouseup', () => markActive());
-    await rendition.display(target || book.cfi || undefined);
+    await show(target || book.cfi || undefined);
     loading.remove();
+  }
+
+  // Ir a una posición sin quedarse colgado si ya no encaja (p. ej. guardada antes de separar
+  // los diálogos): se prueba con el párrafo que la contiene y, si no, con el principio del capítulo
+  async function show(target) {
+    await epub.opened;
+    const tries = [target];
+    if (typeof target === 'string' && target.startsWith('epubcfi(') && target.includes('!')) {
+      let [base, path] = target.slice(8, -1).split('!');
+      path = path.split(',')[0].replace(/:\d+.*$/, '');
+      for (let k = 0; k < 2 && path.split('/').length > 3; k++) {
+        path = path.replace(/\/[^/]*$/, '');
+        tries.push(`epubcfi(${base}!${path}/1:0)`, `epubcfi(${base}!${path})`);
+      }
+      tries.push(epub.spine.get(target)?.href);
+    }
+    // epub.js se queda colgado (en vez de fallar) con una posición imposible: se comprueba antes
+    for (const t of tries) {
+      if (await fits(t)) return rendition.display(t);
+      console.warn('posición no válida', t);
+    }
+    return rendition.display();
+  }
+  async function fits(t) {
+    if (!t) return false;
+    if (!t.startsWith('epubcfi(')) return true;
+    try {
+      const sec = epub.spine.get(t);
+      if (!sec) return false;
+      // Copia aparte del capítulo (cargar el de epub.js aquí lo dejaba a medias y se colgaba)
+      const doc = await epub.load(sec.url);
+      splitDialogues(doc);
+      return !!new EpubCFI(t).toRange(doc);
+    } catch { return false; }
   }
 
   let restyling = null;
@@ -244,21 +293,24 @@ export async function renderReader(root, bookId) {
     const cfi = restyling || currentLoc?.start?.cfi;
     restyling = cfi;
     applyLook();
+    restyleLoadedSections();
     if (!rendition) return;
     rendition.getContents().forEach(styleContents);
     rendition.resize();
-    if (cfi) await rendition.display(cfi);
+    if (cfi) await show(cfi);
     restyling = null;
   }
 
   // Ubicaciones (para el % y la barra)
   async function ensureLocations() {
     try {
-      if (book.locations) epub.locations.load(book.locations);
+      // locVer 2: ubicaciones calculadas con los diálogos ya separados (las anteriores ya no cuadran)
+      if (book.locations && book.locVer === 2) epub.locations.load(book.locations);
       else {
         await epub.ready;
         await epub.locations.generate(1200);
         book.locations = epub.locations.save();
+        book.locVer = 2;
         await putBook(book);
       }
       if (currentLoc) onRelocated(currentLoc);
@@ -367,7 +419,7 @@ export async function renderReader(root, bookId) {
   slider.addEventListener('input', () => { sliderLabel.textContent = `${Math.round(slider.value / 10)}%`; });
   slider.addEventListener('change', () => {
     if (!epub.locations.length()) return toast('Calculando páginas, espera un momento…');
-    rendition.display(epub.locations.cfiFromPercentage(slider.value / 1000));
+    show(epub.locations.cfiFromPercentage(slider.value / 1000));
   });
 
   // ---- Estadísticas: tiempo activo de lectura ----
@@ -447,12 +499,12 @@ export async function renderReader(root, bookId) {
       h('button', { onclick: () => { tabs.children[1].classList.add('on'); tabs.children[0].classList.remove('on'); listBm.classList.remove('hidden'); listToc.classList.add('hidden'); } }, `Marcadores (${(book.bookmarks || []).length})`));
     const current = currentLoc ? chapterFor(currentLoc.start.href) : '';
     for (const t of flatToc(toc)) {
-      listToc.append(h('button', { class: `toc-item ${t.label.trim() === current ? 'on' : ''}`, style: { paddingLeft: `${14 + t.depth * 16}px` }, onclick: () => { rendition.display(t.href); ts.close(); setUi(false); } }, t.label.trim()));
+      listToc.append(h('button', { class: `toc-item ${t.label.trim() === current ? 'on' : ''}`, style: { paddingLeft: `${14 + t.depth * 16}px` }, onclick: () => { show(t.href); ts.close(); setUi(false); } }, t.label.trim()));
     }
     if (!toc.length) listToc.append(h('p', { class: 'muted' }, 'Este libro no tiene índice.'));
     const bms = (book.bookmarks || []).slice().sort((a, b) => (a.pct || 0) - (b.pct || 0));
     for (const b of bms) {
-      listBm.append(h('button', { class: 'toc-item', onclick: () => { rendition.display(b.cfi); ts.close(); setUi(false); } },
+      listBm.append(h('button', { class: 'toc-item', onclick: () => { show(b.cfi); ts.close(); setUi(false); } },
         h('span', {}, b.label), h('span', { class: 'muted small' }, ` · ${Math.round((b.pct || 0) * 100)}%`)));
     }
     if (!bms.length) listBm.append(h('p', { class: 'muted' }, 'Aún no has marcado ninguna página. Usa el icono de marcador arriba.'));
@@ -468,7 +520,7 @@ export async function renderReader(root, bookId) {
       Object.assign(s, patch);
       await saveReaderSettings(s);
       if ('fullscreen' in patch) { patch.fullscreen ? enterFullscreen() : exitFullscreen(); return; }
-      if (rebuild) { const cfi = currentLoc?.start?.cfi; applyLook(); await build(cfi); }
+      if (rebuild) { const cfi = currentLoc?.start?.cfi; applyLook(); restyleLoadedSections(); await build(cfi); }
       else await refreshStyles();
     };
     // Deslizador con botones − y + para ajustar paso a paso
