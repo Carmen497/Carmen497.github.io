@@ -203,11 +203,32 @@ export async function renderReader(root, bookId) {
   // después de colocar la página: el texto se recolocaba ya a la vista (parecía que la página
   // «se recargaba» al cambiar de capítulo) y al reabrir el libro aparecía unas páginas antes.
   const XHTML = 'http://www.w3.org/1999/xhtml';
+  // Las letras van escritas dentro del capítulo y con font-display:block. Con «swap», cada capítulo
+  // nuevo se veía un instante con la letra de reserva (más fina) y luego cambiaba a la elegida.
+  const fontsBase = new URL('fonts/', document.baseURI).href;
+  const fontsCss = await fetch(fontsHref).then((r) => (r.ok ? r.text() : null))
+    .then((t) => t && t.replace(/font-display:\s*swap/g, 'font-display:block').replace(/url\((['"]?)\.\//g, `url($1${fontsBase}`))
+    .catch(() => null);
+  // Precargar la letra elegida (normal, negrita, cursiva) para que cada capítulo la tenga al momento
+  function warmFont() {
+    const f = fontStack(s.font);
+    if (!f || !document.fonts?.load) return Promise.resolve();
+    const loads = ['', 'bold ', 'italic '].map((v) => document.fonts.load(`${v}16px ${f}`).catch(() => {}));
+    return Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]);
+  }
+  await warmFont();
   epub.spine.hooks.content.register((doc) => {
     const head = doc.querySelector('head');
     if (!head) return;
-    const link = doc.createElementNS(XHTML, 'link');
-    link.setAttribute('id', 'rincon-fonts'); link.setAttribute('rel', 'stylesheet'); link.setAttribute('href', fontsHref);
+    let link;
+    if (fontsCss) {
+      link = doc.createElementNS(XHTML, 'style');
+      link.textContent = fontsCss;
+    } else {
+      link = doc.createElementNS(XHTML, 'link');
+      link.setAttribute('rel', 'stylesheet'); link.setAttribute('href', fontsHref);
+    }
+    link.setAttribute('id', 'rincon-fonts');
     const st = doc.createElementNS(XHTML, 'style');
     st.setAttribute('id', 'rincon-user');
     st.textContent = userCss(s);
@@ -519,6 +540,7 @@ export async function renderReader(root, bookId) {
     const set = async (patch, rebuild = false) => {
       Object.assign(s, patch);
       await saveReaderSettings(s);
+      if ('font' in patch) await warmFont();
       if ('fullscreen' in patch) { patch.fullscreen ? enterFullscreen() : exitFullscreen(); return; }
       if (rebuild) { const cfi = currentLoc?.start?.cfi; applyLook(); restyleLoadedSections(); await build(cfi); }
       else await refreshStyles();
