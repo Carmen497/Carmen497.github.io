@@ -87,9 +87,11 @@ export async function pdfToEpub(file, onProgress = () => {}) {
   // Construir capítulos con párrafos
   const chapters = [];
   let chap = null, para = '';
-  const newChapter = (title) => { flush(); chap = { title, html: [] }; chapters.push(chap); };
+  // Ojo: flush no puede llamar a newChapter (que vuelve a llamar a flush): se quedaba en bucle con los PDF que empiezan sin título
+  const startChapter = (title) => { chap = { title, html: [] }; chapters.push(chap); };
+  const newChapter = (title) => { flush(); startChapter(title); };
   const flush = () => {
-    if (para.trim()) { if (!chap) newChapter(null); chap.html.push(`<p>${esc(para.trim())}</p>`); }
+    if (para.trim()) { if (!chap) startChapter(null); chap.html.push(`<p>${esc(para.trim())}</p>`); }
     para = '';
   };
   let pagesInChapter = 0;
@@ -151,7 +153,9 @@ export async function pdfToEpub(file, onProgress = () => {}) {
   onProgress(0.92, 'Creando el EPUB…');
   const baseName = file.name.replace(/\.pdf$/i, '').replace(/[_]+/g, ' ');
   const title = (info.Title && info.Title.trim().length > 1 ? info.Title.trim() : baseName);
-  const author = (info.Author || '').trim();
+  // Algunos PDF traen en «autor» un correo o el programa que lo creó: eso no es un autor
+  let author = (info.Author || '').trim();
+  if (/@|https?:|www.|microsoft|adobe|word|calibre|^usuario$|^user$/i.test(author)) author = '';
   const epub = await buildEpub({ title, author, chapters: finalChapters, cover });
   onProgress(1, 'Listo');
   return epub;
