@@ -63,7 +63,43 @@ export const CATALOG = [
   { type: 'clock', label: 'Reloj', wall: true, span: 1 },
   { type: 'lights', label: 'Guirnalda de luces', wall: true, span: 3 },
   { type: 'wallshelf', label: 'Balda', wall: true, span: 2, color: '#8a5a3b', colorable: true },
+  // ---- De temporada (solo se ofrecen en sus fechas; lo ya colocado se queda) ----
+  { type: 'xmastree', label: 'Árbol de Navidad', w: 1, d: 1, season: 'navidad' },
+  { type: 'gifts', label: 'Regalos', w: 1, d: 1, color: '#c0392b', colorable: true, season: 'navidad' },
+  { type: 'snowman', label: 'Muñeco de nieve', w: 1, d: 1, season: 'navidad' },
+  { type: 'poinsettia', label: 'Flor de Pascua', w: 1, d: 1, season: 'navidad' },
+  { type: 'wreath', label: 'Corona', wall: true, span: 1, season: 'navidad' },
+  { type: 'stockings', label: 'Calcetines', wall: true, span: 2, season: 'navidad' },
+  { type: 'xmaslights', label: 'Espumillón', wall: true, span: 3, overlay: true, season: 'navidad' },
+  { type: 'hearts', label: 'Guirnalda de corazones', wall: true, span: 3, overlay: true, season: 'sanvalentin' },
+  { type: 'roses', label: 'Rosas', w: 1, d: 1, season: 'sanvalentin' },
+  { type: 'flowervase', label: 'Jarrón de flores', w: 1, d: 1, season: 'primavera' },
+  { type: 'flowergarland', label: 'Guirnalda de flores', wall: true, span: 3, overlay: true, season: 'primavera' },
+  { type: 'sunflowers', label: 'Girasoles', w: 1, d: 1, season: 'verano' },
+  { type: 'bunting', label: 'Banderines', wall: true, span: 3, overlay: true, season: 'verano' },
+  { type: 'leafwreath', label: 'Corona de otoño', wall: true, span: 1, season: 'otono' },
+  { type: 'leafpile', label: 'Hojas secas', w: 1, d: 1, flat: true, season: 'otono' },
+  { type: 'pumpkin', label: 'Calabaza', w: 1, d: 1, season: 'halloween' },
+  { type: 'bats', label: 'Murciélagos', wall: true, span: 2, overlay: true, season: 'halloween' },
 ];
+
+// Temporadas: [mes, día] de inicio y fin (pueden cruzar el cambio de año)
+export const SEASONS = {
+  navidad: { label: 'Navidad', emoji: '🎄', from: [11, 15], to: [1, 10] },
+  sanvalentin: { label: 'San Valentín', emoji: '💗', from: [2, 1], to: [2, 16] },
+  primavera: { label: 'Primavera', emoji: '🌷', from: [3, 15], to: [6, 15] },
+  verano: { label: 'Verano', emoji: '☀️', from: [6, 16], to: [9, 15] },
+  otono: { label: 'Otoño', emoji: '🍂', from: [9, 16], to: [11, 30] },
+  halloween: { label: 'Halloween', emoji: '🎃', from: [10, 10], to: [11, 3] },
+};
+export function activeSeasons(date = new Date()) {
+  const v = (date.getMonth() + 1) * 100 + date.getDate();
+  return Object.keys(SEASONS).filter((k) => {
+    const { from, to } = SEASONS[k];
+    const a = from[0] * 100 + from[1], b = to[0] * 100 + to[1];
+    return a <= b ? v >= a && v <= b : v >= a || v <= b;
+  });
+}
 export const catalogOf = (type) => CATALOG.find((c) => c.type === type) || {};
 
 export function footprint(it) {
@@ -91,7 +127,7 @@ export function canPlaceWall(room, it, wall, p) {
   for (const o of room.items) {
     if (o.id === it.id || !catalogOf(o.type).wall || o.wall !== wall) continue;
     // La guirnalda cuelga arriba del todo: puede pasar por encima de cuadros, ventanas y relojes
-    if (it.type === 'lights' || o.type === 'lights') continue;
+    if (it.type === 'lights' || o.type === 'lights' || catalogOf(it.type).overlay || catalogOf(o.type).overlay) continue;
     const os = catalogOf(o.type).span;
     if (p < o.p + os && p + c.span > o.p) return false;
   }
@@ -344,6 +380,37 @@ function drawWallItem(it) {
       const x = t * W, y = 4 * seg * (1 - seg) * 14 + 1;
       s += `<circle class="twinkle t${i % 3}" cx="${f1(x)}" cy="${f1(y + 3)}" r="2.2" fill="${cols[i % 4]}"/>`;
     }
+  } else if (it.type === 'wreath' || it.type === 'leafwreath') {
+    const autumn = it.type === 'leafwreath';
+    const cols = autumn ? ['#c0602a', '#d9912f', '#8c3b2a', '#b5752b'] : ['#2f6b3a', '#3d8a4a', '#27583a'];
+    for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; s += `<ellipse cx="${f1(16 + Math.cos(a) * 10)}" cy="${f1(18 + Math.sin(a) * 10)}" rx="4.5" ry="2.6" fill="${cols[i % cols.length]}" transform="rotate(${f1((a * 180) / Math.PI + 90)} ${f1(16 + Math.cos(a) * 10)} ${f1(18 + Math.sin(a) * 10)})"/>`; }
+    const dots = autumn ? '#7a3a1f' : '#d63a3a';
+    for (const a of [0.3, 1.4, 2.6, 3.7, 4.8, 5.8]) s += `<circle cx="${f1(16 + Math.cos(a) * 10)}" cy="${f1(18 + Math.sin(a) * 10)}" r="1.8" fill="${dots}"/>`;
+    s += autumn ? `<circle cx="16" cy="28" r="3" fill="#e0a040"/>` : `<path d="M16,28 l-6,-4 v8 Z M16,28 l6,-4 v8 Z" fill="#c62828"/><circle cx="16" cy="28" r="2" fill="#e04848"/>`;
+  } else if (it.type === 'stockings') {
+    s += `<rect x="2" y="0" width="${W - 4}" height="2.5" rx="1.2" fill="#6b4a33"/>`;
+    const cols = ['#c62828', '#2e7d4f', '#c62828'];
+    for (let i = 0; i < 3; i++) {
+      const x = 10 + i * 19;
+      s += `<path d="M${x},3 h9 v14 q0,6 -6,6 h-7 q-3,0 -3,-3 q0,-3 3,-3 h4 Z" fill="${cols[i]}"/><rect x="${x - 1}" y="2" width="11" height="5" rx="2" fill="#f5f0e6"/>`;
+    }
+  } else if (it.type === 'xmaslights') {
+    s += `<path d="M0,0 Q${W / 4},14 ${W / 2},2 Q${(3 * W) / 4},14 ${W},0" stroke="#d4af37" stroke-width="3" stroke-dasharray="2 1.5" fill="none" opacity=".9"/>`;
+    s += `<path d="M0,2 Q${W / 4},16 ${W / 2},4 Q${(3 * W) / 4},16 ${W},2" stroke="#c62828" stroke-width="2" stroke-dasharray="1.5 1.5" fill="none" opacity=".85"/>`;
+    for (let i = 1; i < 6; i++) { const t = i / 6, seg = t < 0.5 ? t * 2 : (t - 0.5) * 2; s += `<circle cx="${f1(t * W)}" cy="${f1(4 * seg * (1 - seg) * 12 + 6)}" r="2.6" fill="${['#d63a3a', '#d4af37', '#3a7ad6'][i % 3]}"/>`; }
+  } else if (it.type === 'hearts' || it.type === 'flowergarland' || it.type === 'bunting') {
+    s += `<path d="M0,0 Q${W / 4},14 ${W / 2},2 Q${(3 * W) / 4},14 ${W},0" stroke="#7a6a5a" stroke-width="0.8" fill="none"/>`;
+    const n = 9;
+    for (let i = 1; i < n; i++) {
+      const t = i / n, seg = t < 0.5 ? t * 2 : (t - 0.5) * 2;
+      const x = f1(t * W), y = f1(4 * seg * (1 - seg) * 12 + 1);
+      if (it.type === 'hearts') s += `<path transform="translate(${x},${y})" d="M0,3 C0,0 -4.5,0 -4.5,3 C-4.5,5.5 0,7.5 0,9 C0,7.5 4.5,5.5 4.5,3 C4.5,0 0,0 0,3Z" fill="${['#e0446a', '#f28aa8', '#c2185b'][i % 3]}"/>`;
+      else if (it.type === 'bunting') s += `<path transform="translate(${x},${y})" d="M-4,0 L4,0 L0,9 Z" fill="${['#e8564a', '#f2c94c', '#4aa3df', '#6fbf73'][i % 4]}"/>`;
+      else { const c = ['#f28aa8', '#f7d154', '#b39ddb', '#ffffff'][i % 4]; s += `<g transform="translate(${x},${f1(+y + 3)})">${[0, 72, 144, 216, 288].map((a) => `<circle cx="${f1(Math.cos((a * Math.PI) / 180) * 2.4)}" cy="${f1(Math.sin((a * Math.PI) / 180) * 2.4)}" r="1.9" fill="${c}"/>`).join('')}<circle r="1.3" fill="#f2a93b"/></g>`; }
+    }
+  } else if (it.type === 'bats') {
+    const bat = (x, y, k) => `<path transform="translate(${x},${y}) scale(${k})" d="M0,2 q-3,-4 -8,-3 q2,2 1,4 q3,-1 4,1 q1,-2 3,-2 q2,0 3,2 q1,-2 4,-1 q-1,-2 1,-4 q-5,-1 -8,3 Z" fill="#2a2333"/>`;
+    s += bat(14, 6, 1) + bat(34, 16, 0.8) + bat(52, 4, 1.1) + bat(26, 28, 0.7);
   } else if (it.type === 'wallshelf') {
     const col = it.color || '#8a5a3b';
     const bc = ['#8c3b3b', '#3f6e8c', '#6b7d4a', '#a0773f', '#5d4a7a', '#2f5d50'];
@@ -355,7 +422,7 @@ function drawWallItem(it) {
   return s;
 }
 
-const WALL_ITEM_Z = { window: 140, painting: 120, clock: 135, lights: 160, wallshelf: 105 };
+const WALL_ITEM_Z = { window: 140, painting: 120, clock: 135, lights: 160, wallshelf: 105, wreath: 130, leafwreath: 130, stockings: 75, xmaslights: 162, hearts: 160, flowergarland: 160, bunting: 162, bats: 155 };
 
 function wallTransform(it) {
   const c = catalogOf(it.type);
@@ -435,8 +502,97 @@ function drawFloorItem(it, books, night) {
     case 'cat': return drawCat(it);
     case 'stack': return drawStack(it);
     case 'fireplace': return drawFireplace(it, night);
+    case 'xmastree': return drawXmasTree(it);
+    case 'gifts': return drawGifts(it);
+    case 'snowman': return drawSnowman(it);
+    case 'poinsettia': return drawPotFlowers(it, 'poinsettia');
+    case 'roses': return drawPotFlowers(it, 'roses');
+    case 'flowervase': return drawPotFlowers(it, 'vase');
+    case 'sunflowers': return drawPotFlowers(it, 'sunflowers');
+    case 'pumpkin': return drawPumpkin(it, night);
   }
   return '';
+}
+
+// ---------- Decoración de temporada ----------
+function drawXmasTree(it) {
+  const cx = it.x + 0.5, cy = it.y + 0.5;
+  let s = cyl(cx, cy, 0, 0.16, 10, '#b23a3a');
+  const [bx, by] = proj(cx, cy, 10);
+  s += `<rect x="${f1(bx - 3)}" y="${f1(by - 8)}" width="6" height="8" fill="#6b4a33"/>`;
+  const layers = [[26, 8, 30], [21, 26, 26], [15, 42, 22]]; // [semiancho, altura base, alto]
+  for (const [w, z, hh] of layers) s += `<path d="M${f1(bx - w)},${f1(by - z)} L${f1(bx)},${f1(by - z - hh)} L${f1(bx + w)},${f1(by - z)} Q${f1(bx)},${f1(by - z + 5)} ${f1(bx - w)},${f1(by - z)} Z" fill="#2f6b3a"/><path d="M${f1(bx)},${f1(by - z - hh)} L${f1(bx + w)},${f1(by - z)} Q${f1(bx + w / 2)},${f1(by - z + 3)} ${f1(bx)},${f1(by - z + 2.5)} Z" fill="#27583a"/>`;
+  const balls = [[-14, 12, '#d63a3a'], [10, 14, '#d4af37'], [-4, 22, '#3a7ad6'], [14, 30, '#d63a3a'], [-12, 32, '#d4af37'], [3, 40, '#e8e8f0'], [-7, 48, '#d63a3a'], [7, 52, '#3a7ad6']];
+  balls.forEach(([dx, dz, c], i) => { s += `<circle class="twinkle t${i % 3}" cx="${f1(bx + dx)}" cy="${f1(by - dz)}" r="2.4" fill="${c}"/>`; });
+  const ty = by - 68;
+  s += `<path d="M${f1(bx)},${f1(ty - 6)} l1.8,4 4.3,.4 -3.3,2.8 1,4.2 -3.8,-2.3 -3.8,2.3 1,-4.2 -3.3,-2.8 4.3,-.4 Z" fill="#f2c94c"/>`;
+  return s;
+}
+
+function drawGifts(it) {
+  const col = it.color || '#c0392b';
+  const g = (x0, y0, w, d, hh, c, rib) => box(x0, y0, 0, w, d, hh, c) + box(x0 + w / 2 - 0.035, y0 - 0.005, 0, 0.07, d + 0.01, hh + 0.4, rib) + box(x0 - 0.005, y0 + d / 2 - 0.035, 0, w + 0.01, 0.07, hh + 0.4, rib);
+  return g(it.x + 0.12, it.y + 0.1, 0.5, 0.5, 18, col, '#f2c94c') + g(it.x + 0.55, it.y + 0.5, 0.36, 0.36, 12, '#2e7d4f', '#f5f0e6') + g(it.x + 0.12, it.y + 0.62, 0.3, 0.3, 9, '#3f6e8c', '#e8564a');
+}
+
+function drawSnowman(it) {
+  const cx = it.x + 0.5, cy = it.y + 0.5;
+  const [bx, by] = proj(cx, cy, 0);
+  let s = `<ellipse cx="${f1(bx)}" cy="${f1(by)}" rx="15" ry="6" fill="#000" opacity=".12"/>`;
+  s += `<circle cx="${f1(bx)}" cy="${f1(by - 11)}" r="12" fill="#f4f6fa"/><circle cx="${f1(bx)}" cy="${f1(by - 28)}" r="9" fill="#fbfcff"/><circle cx="${f1(bx)}" cy="${f1(by - 42)}" r="7" fill="#ffffff"/>`;
+  s += `<path d="M${f1(bx + 6)},${f1(by - 13)} a12,12 0 0 1 -12,10" stroke="#d8dee8" stroke-width="3" fill="none"/>`;
+  s += `<path d="M${f1(bx - 9)},${f1(by - 35)} h18 v4 h-18 Z M${f1(bx + 5)},${f1(by - 33)} l3,10 h-4 Z" fill="#c62828"/>`;
+  s += `<circle cx="${f1(bx - 2.5)}" cy="${f1(by - 44)}" r="1" fill="#2a2a2a"/><circle cx="${f1(bx + 2.5)}" cy="${f1(by - 44)}" r="1" fill="#2a2a2a"/><path d="M${f1(bx)},${f1(by - 42)} l7,1.5 -7,1 Z" fill="#f08a24"/>`;
+  s += `<circle cx="${f1(bx)}" cy="${f1(by - 27)}" r="1.2" fill="#2a2a2a"/><circle cx="${f1(bx)}" cy="${f1(by - 23)}" r="1.2" fill="#2a2a2a"/>`;
+  s += `<rect x="${f1(bx - 8)}" y="${f1(by - 50)}" width="16" height="2.5" fill="#2a2a2a"/><rect x="${f1(bx - 5)}" y="${f1(by - 60)}" width="10" height="10" fill="#2a2a2a"/><rect x="${f1(bx - 5)}" y="${f1(by - 53)}" width="10" height="2" fill="#c62828"/>`;
+  return s;
+}
+
+function drawPotFlowers(it, kind) {
+  const cx = it.x + 0.5, cy = it.y + 0.5;
+  const vase = kind === 'vase';
+  let s = vase ? cyl(cx, cy, 0, 0.12, 22, '#7fa7c9') : cyl(cx, cy, 0, 0.15, 12, kind === 'poinsettia' ? '#d4af37' : '#c06a45');
+  const [bx, by] = proj(cx, cy, vase ? 22 : 12);
+  if (kind === 'poinsettia') {
+    s += leaves(bx, by, 7, 22, 200, ['#2f6b3a', '#3d8a4a']);
+    s += leaves(bx, by - 6, 6, 18, 170, ['#d32f2f', '#e53935', '#c62828']);
+    s += `<circle cx="${f1(bx)}" cy="${f1(by - 12)}" r="2.2" fill="#f2c94c"/>`;
+    return s;
+  }
+  const heads = kind === 'sunflowers'
+    ? [[-9, 40], [4, 48], [11, 34]]
+    : [[-8, 26], [0, 34], [8, 28], [-3, 20], [5, 22]];
+  for (const [dx, hh] of heads) s += `<path d="M${f1(bx)},${f1(by)} Q${f1(bx + dx / 2)},${f1(by - hh / 2)} ${f1(bx + dx)},${f1(by - hh)}" stroke="#4f8a4b" stroke-width="1.6" fill="none"/>`;
+  s += leaves(bx, by, 4, 12, 120, ['#5d9a55', '#4f8a4b']);
+  heads.forEach(([dx, hh], i) => {
+    const x = bx + dx, y = by - hh;
+    if (kind === 'sunflowers') s += [0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<ellipse cx="${f1(x + Math.cos((a * Math.PI) / 180) * 5)}" cy="${f1(y + Math.sin((a * Math.PI) / 180) * 5)}" rx="3" ry="1.6" fill="#f7c531" transform="rotate(${a} ${f1(x + Math.cos((a * Math.PI) / 180) * 5)} ${f1(y + Math.sin((a * Math.PI) / 180) * 5)})"/>`).join('') + `<circle cx="${f1(x)}" cy="${f1(y)}" r="3.4" fill="#6b4226"/>`;
+    else if (kind === 'roses') s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="4" fill="${['#c2185b', '#e0446a', '#ad1457'][i % 3]}"/><path d="M${f1(x - 2)},${f1(y)} a2,2 0 1 1 4,0" stroke="#7a0f3a" stroke-width=".8" fill="none"/>`;
+    else s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="3.6" fill="${['#f28aa8', '#f7d154', '#b39ddb', '#ffffff', '#ff8a65'][i % 5]}"/><circle cx="${f1(x)}" cy="${f1(y)}" r="1.3" fill="#f2a93b"/>`;
+  });
+  return s;
+}
+
+function drawPumpkin(it, night) {
+  const cx = it.x + 0.5, cy = it.y + 0.5;
+  const [bx, by] = proj(cx, cy, 0);
+  let s = `<ellipse cx="${f1(bx)}" cy="${f1(by)}" rx="16" ry="6" fill="#000" opacity=".12"/>`;
+  for (const [dx, rx, c] of [[-7, 9, '#d9661f'], [7, 9, '#d9661f'], [0, 10, '#ef7d2a']]) s += `<ellipse cx="${f1(bx + dx)}" cy="${f1(by - 11)}" rx="${rx}" ry="11" fill="${c}"/>`;
+  s += `<path d="M${f1(bx)},${f1(by - 21)} q1,-6 4,-7" stroke="#4f6b2a" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+  const face = night ? '#ffd27a' : '#5a2a0a';
+  s += `<path d="M${f1(bx - 6)},${f1(by - 14)} l2.5,-4 2.5,4 Z M${f1(bx + 1)},${f1(by - 14)} l2.5,-4 2.5,4 Z M${f1(bx - 6)},${f1(by - 8)} q6,5 12,0 l-2,1 -2,-1.5 -2,1.5 -2,-1.5 -2,1.5 Z" fill="${face}"/>`;
+  return s;
+}
+
+function drawLeafPile(it) {
+  let s = '';
+  const cols = ['#c0602a', '#d9912f', '#8c3b2a', '#e0b040', '#a0522d'];
+  for (let i = 0; i < 26; i++) {
+    const fx = it.x + 0.15 + hashFrac(it.id + 'x' + i) * 0.7, fy = it.y + 0.15 + hashFrac(it.id + 'y' + i) * 0.7;
+    const [x, y] = proj(fx, fy, 1 + hashFrac(it.id + 'z' + i) * 4);
+    s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="4" ry="2" fill="${cols[i % cols.length]}" transform="rotate(${Math.round(hashFrac(it.id + 'r' + i) * 180)} ${f1(x)} ${f1(y)})"/>`;
+  }
+  return s;
 }
 
 // Dibujo suelto de un objeto (para el catálogo de decoración)
@@ -444,7 +600,7 @@ export function itemPreview(type, color) {
   const c = catalogOf(type);
   const it = { id: 'prev-' + type, type, x: 0, y: 0, rot: 0, wall: 'b', p: 0, color: color || c.color };
   if (c.wall) return `<g transform="${faceY(0, 0, 0)}">${drawWallItem(it)}</g>`;
-  if (c.flat) return drawRug(it);
+  if (c.flat) return it.type === 'leafpile' ? drawLeafPile(it) : drawRug(it);
   const fake = type === 'shelf'
     ? Array.from({ length: 26 }, (_, i) => ({ id: 'p' + i, spineColor: ['#8c3b3b', '#3f6e8c', '#6b7d4a', '#a0773f', '#5d4a7a'][i % 5] }))
     : [];
@@ -455,8 +611,8 @@ export function itemPreview(type, color) {
 export function renderRoom(room, booksByShelf, { edit = false, selectedId = null, night = false, labels = true } = {}) {
   const N = room.size;
   let s = `<defs>
-    <radialGradient id="glow"><stop offset="0" stop-color="#ffd27a" stop-opacity=".75"/><stop offset=".5" stop-color="#ffb84d" stop-opacity=".22"/><stop offset="1" stop-color="#ffb84d" stop-opacity="0"/></radialGradient>
-    <radialGradient id="fireglow"><stop offset="0" stop-color="#ff9a3c" stop-opacity=".7"/><stop offset="1" stop-color="#ff7a2c" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#ffd27a" stop-opacity=".32"/><stop offset=".5" stop-color="#ffb84d" stop-opacity=".08"/><stop offset="1" stop-color="#ffb84d" stop-opacity="0"/></radialGradient>
+    <radialGradient id="fireglow"><stop offset="0" stop-color="#ff9a3c" stop-opacity=".3"/><stop offset="1" stop-color="#ff7a2c" stop-opacity="0"/></radialGradient>
   </defs>`;
   s += drawRoomShell(room, edit);
 
@@ -465,11 +621,11 @@ export function renderRoom(room, booksByShelf, { edit = false, selectedId = null
   for (const it of items.filter((i) => catalogOf(i.type).wall)) {
     // Zona invisible para poder tocarlo con el dedo aunque el dibujo sea fino (la guirnalda)
     const W = catalogOf(it.type).span * 32;
-    s += `<g class="item ${it.id === selectedId ? 'selected' : ''}" data-id="${it.id}"><g transform="${wallTransform(it)}"><rect x="0" y="-8" width="${W}" height="${it.type === 'lights' ? 34 : 24}" fill="#fff" fill-opacity="0"/>${drawWallItem(it)}</g></g>`;
+    s += `<g class="item ${it.id === selectedId ? 'selected' : ''}" data-id="${it.id}"><g transform="${wallTransform(it)}"><rect x="0" y="-8" width="${W}" height="${it.type === 'lights' || catalogOf(it.type).overlay ? 34 : 24}" fill="#fff" fill-opacity="0"/>${drawWallItem(it)}</g></g>`;
   }
   // Alfombras
   for (const it of items.filter((i) => catalogOf(i.type).flat)) {
-    s += `<g class="item ${it.id === selectedId ? 'selected' : ''}" data-id="${it.id}">${drawRug(it)}</g>`;
+    s += `<g class="item ${it.id === selectedId ? 'selected' : ''}" data-id="${it.id}">${it.type === 'leafpile' ? drawLeafPile(it) : drawRug(it)}</g>`;
   }
   // Huella del seleccionado
   if (edit && selectedId) {
@@ -492,9 +648,10 @@ export function renderRoom(room, booksByShelf, { edit = false, selectedId = null
   if (night) {
     s += `<rect x="${-N * 32 - 200}" y="${-WALL_H - 200}" width="${N * 64 + 400}" height="${N * 32 + WALL_H + 400}" fill="#0d1230" opacity=".38" pointer-events="none"/>`;
     for (const it of items) {
-      if (it.type === 'lamp') { const [x, y] = proj(it.x + 0.5, it.y + 0.5, 60); s += `<circle class="glow" cx="${x}" cy="${y}" r="95" fill="url(#glow)" pointer-events="none"/>`; }
-      if (it.type === 'fireplace') { const fp = footprint(it); const [x, y] = proj(it.x + fp.w / 2, it.y + fp.d, 20); s += `<circle class="glow fire" cx="${x}" cy="${y}" r="90" fill="url(#fireglow)" pointer-events="none"/>`; }
-      if (it.type === 'lights') { const c = catalogOf('lights'); const [x, y] = it.wall === 'a' ? proj(0, it.p + c.span / 2, 150) : proj(it.p + c.span / 2, 0, 150); s += `<circle class="glow" cx="${x}" cy="${y}" r="70" fill="url(#glow)" opacity=".7" pointer-events="none"/>`; }
+      if (it.type === 'lamp') { const [x, y] = proj(it.x + 0.5, it.y + 0.5, 60); s += `<circle class="glow" cx="${x}" cy="${y}" r="60" fill="url(#glow)" pointer-events="none"/>`; }
+      if (it.type === 'fireplace') { const fp = footprint(it); const [x, y] = proj(it.x + fp.w / 2, it.y + fp.d, 20); s += `<circle class="glow fire" cx="${x}" cy="${y}" r="65" fill="url(#fireglow)" pointer-events="none"/>`; }
+      if (it.type === 'xmastree') { const [x, y] = proj(it.x + 0.5, it.y + 0.5, 45); s += `<circle class="glow" cx="${x}" cy="${y}" r="38" fill="url(#glow)" fill-opacity=".6" pointer-events="none"/>`; }
+      if (it.type === 'lights') { const c = catalogOf('lights'); const [x, y] = it.wall === 'a' ? proj(0, it.p + c.span / 2, 150) : proj(it.p + c.span / 2, 0, 150); s += `<circle class="glow" cx="${x}" cy="${y}" r="40" fill="url(#glow)" fill-opacity=".5" pointer-events="none"/>`; }
       if (it.type === 'window') { const c = catalogOf('window'); const [x, y] = it.wall === 'a' ? proj(0.3, it.p + c.span / 2, 100) : proj(it.p + c.span / 2, 0.3, 100); s += `<ellipse cx="${x}" cy="${y}" rx="50" ry="40" fill="#9fb4ff" opacity=".08" pointer-events="none"/>`; }
     }
   }

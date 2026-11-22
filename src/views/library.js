@@ -6,7 +6,7 @@ import {
 } from '../store.js';
 import {
   renderRoom, roomViewBox, screenToFloor, screenToWall, CATALOG, catalogOf, canPlace, canPlaceWall,
-  footprint, itemPreview, FLOOR_OPTIONS, WALL_OPTIONS,
+  footprint, itemPreview, FLOOR_OPTIONS, WALL_OPTIONS, SEASONS, activeSeasons,
 } from '../iso/room.js';
 import { pickFiles } from '../importer.js';
 import { openShelf } from './shelf.js';
@@ -62,6 +62,8 @@ async function roomView(container, nav) {
   container.append(wrap, overlay);
 
   let edit = false, selectedId = null, placing = null;
+  // Si hay temporada (p. ej. Navidad), el catálogo se abre en ella
+  let palTab = activeSeasons()[0] || 'muebles';
 
   const booksByShelf = () => booksForShelves(room.items, books);
 
@@ -289,8 +291,14 @@ async function roomView(container, nav) {
         actions);
       return;
     }
+    // Pestañas: muebles de siempre y, si toca, la decoración de temporada (Navidad, Halloween…)
+    const seasons = activeSeasons();
+    if (palTab !== 'muebles' && !seasons.includes(palTab)) palTab = 'muebles';
+    const tabs = seasons.length ? h('div', { class: 'chips pal-tabs' },
+      [['muebles', 'Muebles'], ...seasons.map((k) => [k, `${SEASONS[k].emoji} ${SEASONS[k].label}`])].map(([k, l]) =>
+        h('button', { class: `chip ${palTab === k ? 'on' : ''}`, onclick: () => { palTab = k; placing = null; renderEditBar(); } }, l))) : null;
     const palette = h('div', { class: 'palette' });
-    for (const c of CATALOG) {
+    for (const c of CATALOG.filter((x) => (x.season || 'muebles') === palTab)) {
       const pv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       pv.innerHTML = itemPreview(c.type);
       const b = h('button', { class: `pal-item ${placing?.type === c.type ? 'on' : ''}`, onclick: () => { placing = placing?.type === c.type ? null : c; renderEditBar(); if (placing) toast(c.wall ? 'Toca una pared para colgarlo' : 'Toca el suelo para colocarlo'); } }, pv, h('span', {}, c.label));
@@ -303,7 +311,7 @@ async function roomView(container, nav) {
         h('div', { class: 'row gap' },
           h('button', { class: 'pill', onclick: roomOptions }, icon('settings', 18), 'Sala'),
           btn('Terminar', () => setEdit(false), 'primary small'))),
-      palette);
+      tabs, palette);
     // Ajustar el encuadre de las miniaturas una vez en pantalla
     requestAnimationFrame(() => palette.querySelectorAll('svg').forEach((s) => {
       try { const bb = s.getBBox(); s.setAttribute('viewBox', `${bb.x - 3} ${bb.y - 3} ${bb.width + 6} ${bb.height + 6}`); } catch {}

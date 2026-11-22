@@ -246,7 +246,7 @@ body.reading #toast { bottom: 80px; }
 @keyframes twinkle { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 .glow { mix-blend-mode: screen; animation: glow 4s ease-in-out infinite; }
 .glow.fire { animation-duration: 1.2s; }
-@keyframes glow { 0%,100% { opacity: .9; } 50% { opacity: 1; } }
+@keyframes glow { 0%,100% { opacity: .85; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .cat-tail, .steam, .flame, .twinkle, .glow { animation: none; } }
 
 .room-overlay {
@@ -523,3 +523,4 @@ body.dragging::after {
   .list-view { padding-bottom: 24px; }
   #toast { bottom: 24px; }
 }
+.pal-tabs { margin-bottom: 6px; }
