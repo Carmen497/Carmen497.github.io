@@ -15,17 +15,30 @@ export const THEMES = {
   custom: { name: 'Mío', bg: null, fg: null, accent: '#a0673f' },
 };
 
+// [valor, nombre, tipo, nota]. tipo: serif (con remates, como un libro impreso) o sans (sin remates, más limpia)
 export const FONTS = [
-  ['original', 'Original del libro'],
-  ['Literata', 'Literata'],
-  ['Lora', 'Lora'],
-  ['Merriweather', 'Merriweather'],
-  ['EB Garamond', 'Garamond'],
-  ['Atkinson Hyperlegible', 'Atkinson (muy legible)'],
-  ['Nunito', 'Nunito (sin serifa)'],
-  ['Georgia', 'Georgia'],
-  ['system-ui', 'Del sistema'],
+  ['Literata', 'Literata', 'serif', 'Pensada para leer en pantalla'],
+  ['Source Serif 4', 'Source Serif', 'serif', 'Clara y amplia'],
+  ['Noto Serif', 'Noto Serif', 'serif', 'Grande y redonda'],
+  ['Merriweather', 'Merriweather', 'serif', 'Robusta, buena en letra pequeña'],
+  ['Bitter', 'Bitter', 'serif', 'Trazo firme, muy nítida'],
+  ['Lora', 'Lora', 'serif', 'Elegante'],
+  ['EB Garamond', 'Garamond', 'serif', 'Clásica de novela'],
+  ['Atkinson Hyperlegible', 'Atkinson', 'sans', 'Hecha para leer sin esfuerzo'],
+  ['Lexend', 'Lexend', 'sans', 'Espaciada, cansa menos la vista'],
+  ['Andika', 'Andika', 'sans', 'Letras muy diferenciadas'],
+  ['Open Sans', 'Open Sans', 'sans', 'Limpia y neutra'],
+  ['Nunito', 'Nunito', 'sans', 'Redondeada y suave'],
+  ['OpenDyslexic', 'Dyslexic', 'sans', 'Para dislexia'],
+  ['system-ui', 'La del móvil', 'sans', 'La letra del sistema'],
+  ['original', 'Original del libro', '', 'La que trae el libro'],
 ];
+export function fontStack(v) {
+  if (v === 'original') return null;
+  if (v === 'system-ui') return 'system-ui, sans-serif';
+  const f = FONTS.find(([x]) => x === v);
+  return `'${v}', ${f?.[2] === 'sans' ? 'system-ui, sans-serif' : 'Georgia, serif'}`;
+}
 
 function themeColors(s) {
   const t = THEMES[s.theme] || THEMES.paper;
@@ -34,7 +47,7 @@ function themeColors(s) {
 
 function userCss(s) {
   const { bg, fg, accent } = themeColors(s);
-  const font = s.font === 'original' ? null : (s.font === 'system-ui' ? 'system-ui, sans-serif' : `'${s.font}', Georgia, serif`);
+  const font = fontStack(s.font);
   const textSel = 'body, p, div, span, li, blockquote, td, dd, dt, section, article';
   return `
     html, body { background: ${bg} !important; }
@@ -45,6 +58,8 @@ function userCss(s) {
     body { color: ${fg} !important; font-size: ${s.fontSize}px !important; letter-spacing: ${s.letterSpacing}em; -webkit-font-smoothing: antialiased; }
     ${textSel} { color: ${fg} !important; line-height: ${s.lineHeight} !important; ${font ? `font-family: ${font} !important;` : ''} }
     h1, h2, h3, h4, h5, h6 { color: ${fg} !important; ${font ? `font-family: ${font} !important;` : ''} line-height: 1.3 !important; }
+    /* Muchos libros fijan su propia letra con reglas fuertes: el :not(#…) da a esta regla prioridad de id para que mande la elegida */
+    ${font ? `body:not(#rincon-x), body *:not(#rincon-x):not(code):not(pre):not(kbd):not(samp) { font-family: ${font} !important; }` : ''}
     p { margin-top: 0 !important; margin-bottom: ${s.paraSpacing}em !important; text-align: ${s.align} !important;
         ${s.indent ? '' : 'text-indent: 0 !important;'} hyphens: ${s.hyphens ? 'auto' : 'manual'} !important; -webkit-hyphens: ${s.hyphens ? 'auto' : 'manual'} !important; }
     a, a * { color: ${accent} !important; }
@@ -399,16 +414,29 @@ export async function renderReader(root, bookId) {
       if (rebuild) { const cfi = currentLoc?.start?.cfi; applyLook(); await build(cfi); }
       else await refreshStyles();
     };
+    // Deslizador con botones − y + para ajustar paso a paso
     const slider = (label, key, min, max, step, fmt, rebuild) => {
       const val = h('span', { class: 'rset-val' }, fmt(s[key]));
       const input = h('input', { type: 'range', min, max, step, value: s[key] });
       let t;
-      input.addEventListener('input', () => {
+      const apply = () => {
         val.textContent = fmt(+input.value);
         clearTimeout(t);
-        t = setTimeout(() => set({ [key]: +input.value }, rebuild), key === 'brightness' || key === 'warmth' ? 0 : 180);
-      });
-      return h('div', { class: 'rset-row' }, h('span', { class: 'rset-label' }, label), input, val);
+        t = setTimeout(() => set({ [key]: +input.value }, rebuild), key === 'brightness' || key === 'warmth' ? 0 : 250);
+      };
+      const nudge = (dir) => {
+        const dec = (String(step).split('.')[1] || '').length;
+        const v = Math.min(max, Math.max(min, +(+input.value + dir * step).toFixed(dec)));
+        if (v === +input.value) return;
+        input.value = v; apply();
+      };
+      input.addEventListener('input', apply);
+      return h('div', { class: 'rset-row stepper' }, h('span', { class: 'rset-label' }, label),
+        h('div', { class: 'step-ctl' },
+          h('button', { class: 'step-btn', 'aria-label': `Menos ${label.toLowerCase()}`, onclick: () => nudge(-1) }, '−'),
+          input,
+          h('button', { class: 'step-btn', 'aria-label': `Más ${label.toLowerCase()}`, onclick: () => nudge(1) }, '+')),
+        val);
     };
     const toggle = (label, key, rebuild) => {
       const cb = h('input', { type: 'checkbox', checked: !!s[key] });
@@ -439,19 +467,26 @@ export async function renderReader(root, bookId) {
     fgIn.addEventListener('input', () => set({ customFg: fgIn.value }));
     const customRow = h('div', { class: `row gap ${s.theme === 'custom' ? '' : 'hidden'}` }, h('label', { class: 'pill' }, bgIn, 'Fondo'), h('label', { class: 'pill' }, fgIn, 'Texto'));
 
-    const fontSel = h('select', { class: 'select' }, FONTS.map(([v, l]) => h('option', { value: v, selected: s.font === v, style: { fontFamily: v } }, l)));
-    fontSel.addEventListener('change', () => set({ font: fontSel.value }));
+    // Cada letra se enseña escrita con ella misma, para elegir viéndola
+    const fontSel = h('div', { class: 'font-grid' }, FONTS.map(([v, l, , note]) =>
+      h('button', { class: `font-opt ${s.font === v ? 'on' : ''}`, onclick: (e) => {
+        fontSel.querySelectorAll('.on').forEach((x) => x.classList.remove('on'));
+        e.currentTarget.classList.add('on');
+        set({ font: v });
+      } },
+      h('span', { class: 'font-sample', style: { fontFamily: fontStack(v) || 'inherit' } }, l),
+      h('span', { class: 'font-note' }, note))));
 
     body.append(
       h('h3', { class: 'rset-h' }, 'Tema'), themeRow, customRow,
       slider('Brillo', 'brightness', 30, 100, 1, (v) => `${v}%`),
       slider('Luz cálida', 'warmth', 0, 100, 1, (v) => `${v}%`),
       h('h3', { class: 'rset-h' }, 'Texto'),
-      h('div', { class: 'rset-row' }, h('span', { class: 'rset-label' }, 'Letra'), fontSel),
+      h('span', { class: 'rset-label' }, 'Letra'), fontSel,
       slider('Tamaño', 'fontSize', 12, 48, 1, (v) => `${v}px`),
-      slider('Interlineado', 'lineHeight', 1.1, 2.4, 0.05, (v) => v.toFixed(2)),
+      slider('Interlineado', 'lineHeight', 1.1, 2.4, 0.1, (v) => v.toFixed(2)),
       slider('Entre párrafos', 'paraSpacing', 0, 2, 0.1, (v) => `${v.toFixed(1)}`),
-      slider('Espacio letras', 'letterSpacing', -0.03, 0.12, 0.005, (v) => v.toFixed(3)),
+      slider('Espacio letras', 'letterSpacing', -0.03, 0.12, 0.01, (v) => v.toFixed(3)),
       slider('Márgenes', 'margin', 0, 120, 2, (v) => `${v}px`),
       h('div', { class: 'rset-row' }, h('span', { class: 'rset-label' }, 'Alineación'), choice('align', [['justify', 'Justificado'], ['left', 'Izquierda']])),
       toggle('Sangría en párrafos', 'indent'),

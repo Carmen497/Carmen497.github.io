@@ -16,6 +16,13 @@ const fonts = [
   { pkg: 'atkinson-hyperlegible', family: 'Atkinson Hyperlegible' },
   { pkg: 'eb-garamond', family: 'EB Garamond' },
   { pkg: 'nunito', family: 'Nunito' },
+  { pkg: 'lexend', family: 'Lexend' },
+  { pkg: 'andika', family: 'Andika' },
+  { pkg: 'open-sans', family: 'Open Sans' },
+  { pkg: 'noto-serif', family: 'Noto Serif' },
+  { pkg: 'source-serif-4', family: 'Source Serif 4' },
+  { pkg: 'opendyslexic', family: 'OpenDyslexic' },
+  { pkg: 'bitter', family: 'Bitter' },
 ];
 
 let css = '/* Generado por scripts/setup-assets.mjs */\n';
