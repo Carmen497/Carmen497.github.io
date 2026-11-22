@@ -300,6 +300,7 @@ export async function renderReader(root, bookId) {
   // Ir a una posición sin quedarse colgado si ya no encaja (p. ej. guardada antes de separar
   // los diálogos): se prueba con el párrafo que la contiene y, si no, con el principio del capítulo
   async function show(target) {
+    navSeq++; // un salto nuevo cancela la recolocación de uno anterior
     await epub.opened;
     const tries = [target];
     if (typeof target === 'string' && target.startsWith('epubcfi(') && target.includes('!')) {
@@ -313,10 +314,37 @@ export async function renderReader(root, bookId) {
     }
     // epub.js se queda colgado (en vez de fallar) con una posición imposible: se comprueba antes
     for (const t of tries) {
-      if (await fits(t)) return rendition.display(t);
+      if (await fits(t)) { await rendition.display(t); settle(t); return; }
       console.warn('posición no válida', t);
     }
     return rendition.display();
+  }
+  // Tras colocar la página, la letra o el estilo pueden terminar de aplicarse y mover el texto:
+  // entonces la página mostrada ya no contiene la posición guardada (y al guardarse la nueva, cada
+  // vez que se reabría el libro se perdían unas páginas). Se espera a la letra y se recoloca si hace falta.
+  const cfiCmp = new EpubCFI();
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function settle(t) {
+    if (typeof t !== 'string' || !t.startsWith('epubcfi(')) return;
+    settling = navSeq; // solo mientras no se pase página
+    const seq = navSeq, r = rendition;
+    try {
+      for (let i = 0; i < 3 && seq === navSeq && r === rendition; i++) {
+        const fonts = Promise.all(rendition.getContents().map((c) => c.document?.fonts?.ready));
+        await Promise.race([fonts, wait(1500)]);
+        await wait(80);
+        const loc = await rendition.currentLocation();
+        const start = loc?.start?.cfi, end = loc?.end?.cfi;
+        if (!start) return;
+        if (cfiCmp.compare(t, start) >= 0 && (!end || cfiCmp.compare(t, end) <= 0)) return;
+        if (seq !== navSeq || r !== rendition) return; // ha pasado página: no devolverla atrás
+        await rendition.display(t);
+      }
+    } catch (e) { console.warn('settle', e); }
+    finally {
+      settling = null;
+      try { const loc = await rendition.currentLocation(); if (loc?.start) onRelocated(loc); } catch {}
+    }
   }
   async function fits(t) {
     if (!t) return false;
@@ -361,12 +389,15 @@ export async function renderReader(root, bookId) {
     } catch (e) { console.warn('locations', e); }
   }
 
+  let settling = null, navSeq = 0;
   function onRelocated(loc) {
     currentLoc = loc;
     const cfi = loc.start.cfi;
     let pct = book.progress || 0;
     if (epub.locations.length()) pct = epub.locations.percentageFromCfi(cfi);
     if (loc.atEnd) pct = 1;
+    // Mientras se comprueba la posición al abrir, se enseña pero no se guarda (podría ser intermedia)
+    if (settling === navSeq) { showStatus(loc, pct); return; }
     const delta = pct - lastProgress;
     if (delta > 0 && delta < 0.03 && !restyling) {
       session.pages += delta * (book.pages || 300);
@@ -379,7 +410,12 @@ export async function renderReader(root, bookId) {
     if (book.status === 'pendiente' && pct > 0.005) { book.status = 'leyendo'; book.startedAt ||= Date.now(); }
     saveSoon();
     markActive();
-    // Barra de estado
+    showStatus(loc, pct);
+    if (loc.atEnd && book.status !== 'leido') setTimeout(finishedPrompt, 400);
+  }
+  // Barra de estado
+  function showStatus(loc, pct) {
+    const cfi = loc.start.cfi;
     chapterEl.textContent = chapterFor(loc.start.href) || book.title;
     const displayed = loc.start.displayed;
     const pageInfo = displayed && s.flow !== 'scroll' ? `pág. ${displayed.page} de ${displayed.total} · ` : '';
@@ -388,7 +424,6 @@ export async function renderReader(root, bookId) {
     sliderLabel.textContent = `${Math.round(pct * 100)}%`;
     updateLeft();
     bmBtn.classList.toggle('on', (book.bookmarks || []).some((b) => b.cfi === cfi));
-    if (loc.atEnd && book.status !== 'leido') setTimeout(finishedPrompt, 400);
   }
 
   function updateLeft() {
@@ -400,7 +435,7 @@ export async function renderReader(root, bookId) {
   }
 
   let saveTimer;
-  function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => putBook(book), 800); }
+  function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(() => putBook(book), 250); }
 
   // ---- Navegación por toques ----
   let touch = null, swiped = false;
@@ -413,7 +448,7 @@ export async function renderReader(root, bookId) {
     const dx = t.screenX - touch.x, dy = t.screenY - touch.y;
     if (s.flow !== 'scroll' && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3 && Date.now() - touch.time < 800) {
       swiped = true; setTimeout(() => { swiped = false; }, 400);
-      dx < 0 ? rendition.next() : rendition.prev();
+      dx < 0 ? (navSeq++, rendition.next()) : (navSeq++, rendition.prev());
       setUi(false);
     }
     touch = null;
@@ -435,12 +470,12 @@ export async function renderReader(root, bookId) {
     if (uiVisible) return setUi(false);
     if (s.flow === 'scroll') return setUi(true);
     if (s.tapZones === 'next') {
-      if (x < 0.25) return rendition.prev();
+      if (x < 0.25) return (navSeq++, rendition.prev());
       if (x > 0.4 && x < 0.6) return setUi(true);
-      return rendition.next();
+      return (navSeq++, rendition.next());
     }
-    if (x < 0.3) return rendition.prev();
-    if (x > 0.7) return rendition.next();
+    if (x < 0.3) return (navSeq++, rendition.prev());
+    if (x > 0.7) return (navSeq++, rendition.next());
     setUi(true);
   }
   // Toques en los márgenes (fuera del iframe)
@@ -453,8 +488,8 @@ export async function renderReader(root, bookId) {
 
   function onKey(e) {
     markActive();
-    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') rendition.next();
-    if (e.key === 'ArrowLeft' || e.key === 'PageUp') rendition.prev();
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') (navSeq++, rendition.next());
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') (navSeq++, rendition.prev());
     if (e.key === 'Escape') setUi(!uiVisible);
   }
   const docKey = (e) => { if (!document.querySelector('.sheet-backdrop')) onKey(e); };
