@@ -444,7 +444,7 @@ body.reading { background: var(--r-bg, #fbf6ec); }
   position: fixed; inset: 0; background: var(--r-bg); color: var(--r-fg);
   display: flex; flex-direction: column; transition: background .3s;
 }
-.reader-page { flex: 1; min-height: 0; position: relative; }
+.reader-page { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 .reader-viewer { width: 100%; height: 100%; }
 .reader-status {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;

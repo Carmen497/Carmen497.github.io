@@ -195,6 +195,7 @@ export async function renderReader(root, bookId) {
     progressEl.style.display = s.showProgress ? '' : 'none';
     leftEl.style.display = s.showTimeLeft ? '' : 'none';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', bg);
+    lockSize(); // los márgenes cambian el ancho
   }
 
   const fontsHref = new URL('fonts/fonts.css', document.baseURI).href;
@@ -599,7 +600,12 @@ export async function renderReader(root, bookId) {
       Object.assign(s, patch);
       await saveReaderSettings(s);
       if ('font' in patch) await updateFonts();
-      if ('fullscreen' in patch) { patch.fullscreen ? enterFullscreen() : exitFullscreen(); return; }
+      if ('fullscreen' in patch) {
+        patch.fullscreen ? enterFullscreen() : exitFullscreen();
+        // Al cambiar el ajuste, la página adopta el tamaño nuevo (también si es más pequeño)
+        setTimeout(() => { lockSize(true); rendition?.resize(); }, 400);
+        return;
+      }
       if (rebuild) { const cfi = currentLoc?.start?.cfi; applyLook(); restyleLoadedSections(); await build(cfi); }
       else await refreshStyles();
     };
@@ -722,7 +728,27 @@ export async function renderReader(root, bookId) {
     location.hash = '#/';
   }
 
+  // Tamaño fijo de la página: se queda con el mayor visto (el de pantalla completa). Si el móvil
+  // sale un momento de pantalla completa (apps recientes, barra de notificaciones), la zona se
+  // encoge un poco y epub.js volvía a repartir todo el texto; ahora solo se recorta el borde.
+  // Se recalcula si cambia el ancho (girar el móvil, márgenes) o si hay más sitio.
+  let lock = null;
+  function lockSize(force = false) {
+    const cs = getComputedStyle(page);
+    const w = page.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const hgt = page.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    if (!w || !hgt) return;
+    if (force || !lock || Math.abs(w - lock.w) > 1 || hgt > lock.h + 1) {
+      lock = { w, h: hgt };
+      viewer.style.width = `${w}px`;
+      viewer.style.height = `${hgt}px`;
+    }
+  }
+  const onWinResize = () => lockSize();
+  window.addEventListener('resize', onWinResize);
+
   applyLook();
+  lockSize(true);
   try {
     await build();
   } catch (e) {
@@ -735,6 +761,7 @@ export async function renderReader(root, bookId) {
     clearInterval(tick); clearInterval(flushTimer); clearInterval(clockTimer);
     document.removeEventListener('visibilitychange', onVis);
     document.removeEventListener('keyup', docKey);
+    window.removeEventListener('resize', onWinResize);
     await flushStats();
     clearTimeout(saveTimer);
     putBook(book);
