@@ -203,48 +203,72 @@ export async function renderReader(root, bookId) {
   // después de colocar la página: el texto se recolocaba ya a la vista (parecía que la página
   // «se recargaba» al cambiar de capítulo) y al reabrir el libro aparecía unas páginas antes.
   const XHTML = 'http://www.w3.org/1999/xhtml';
-  // Las letras van escritas dentro del capítulo y con font-display:block. Con «swap», cada capítulo
-  // nuevo se veía un instante con la letra de reserva (más fina) y luego cambiaba a la elegida.
+  // La letra elegida va metida dentro de cada capítulo (como datos, no como enlace). Si cada
+  // capítulo la descargaba, mientras llegaba se veía con la letra de reserva (más fina) o, en
+  // móviles lentos, la página se quedaba en blanco.
   const fontsBase = new URL('fonts/', document.baseURI).href;
-  const fontsCss = await fetch(fontsHref).then((r) => (r.ok ? r.text() : null))
-    .then((t) => t && t.replace(/font-display:\s*swap/g, 'font-display:block').replace(/url\((['"]?)\.\//g, `url($1${fontsBase}`))
-    .catch(() => null);
-  // Precargar la letra elegida (normal, negrita, cursiva) para que cada capítulo la tenga al momento
-  function warmFont() {
-    const f = fontStack(s.font);
-    if (!f || !document.fonts?.load) return Promise.resolve();
-    const loads = ['', 'bold ', 'italic '].map((v) => document.fonts.load(`${v}16px ${f}`).catch(() => {}));
-    return Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 1500))]);
+  const faceCache = new Map();
+  const asDataUrl = (blob) => new Promise((res, rej) => {
+    const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob);
+  });
+  async function fontFaceCss(font) {
+    if (!font || font === 'original' || font === 'system-ui') return '';
+    if (faceCache.has(font)) return faceCache.get(font);
+    try {
+      const css = await fetch(fontsHref).then((r) => r.text());
+      const rules = (css.match(/@font-face\s*\{[^}]*\}/g) || []).filter((r) => r.includes(`'${font}'`));
+      const out = await Promise.all(rules.map(async (r) => {
+        const file = r.match(/url\(['"]?(?:\.\/)?([^'")]+)['"]?\)/)?.[1];
+        if (!file) return '';
+        const blob = await fetch(fontsBase + file).then((x) => { if (!x.ok) throw new Error(x.status); return x.blob(); });
+        const data = await asDataUrl(new Blob([blob], { type: 'font/woff2' }));
+        return r.replace(/src:[^;}]*/, `src:url(${data}) format('woff2')`);
+      }));
+      const text = out.join('\n');
+      faceCache.set(font, text);
+      return text;
+    } catch (e) {
+      console.warn('letra', font, e);
+      return null; // sin datos: se usa el enlace normal a fonts.css
+    }
   }
-  await warmFont();
+  let fontsCss = await fontFaceCss(s.font);
+  function fontsNode(doc, create) {
+    const el = create(fontsCss == null ? 'link' : 'style');
+    if (fontsCss == null) { el.setAttribute('rel', 'stylesheet'); el.setAttribute('href', fontsHref); }
+    else el.textContent = fontsCss;
+    el.setAttribute('id', 'rincon-fonts');
+    return el;
+  }
   epub.spine.hooks.content.register((doc) => {
     const head = doc.querySelector('head');
     if (!head) return;
-    let link;
-    if (fontsCss) {
-      link = doc.createElementNS(XHTML, 'style');
-      link.textContent = fontsCss;
-    } else {
-      link = doc.createElementNS(XHTML, 'link');
-      link.setAttribute('rel', 'stylesheet'); link.setAttribute('href', fontsHref);
-    }
-    link.setAttribute('id', 'rincon-fonts');
     const st = doc.createElementNS(XHTML, 'style');
     st.setAttribute('id', 'rincon-user');
     st.textContent = userCss(s);
-    head.append(link, st);
+    head.append(fontsNode(doc, (tag) => doc.createElementNS(XHTML, tag)), st);
   });
+  // Al cambiar de letra: preparar la nueva antes de aplicar el estilo
+  async function updateFonts() { fontsCss = await fontFaceCss(s.font); }
+  function setFonts(doc, create) {
+    const old = doc.getElementById('rincon-fonts');
+    if (old && old.tagName.toLowerCase() === 'style' && fontsCss != null && old.textContent === fontsCss) return;
+    const el = fontsNode(doc, create);
+    if (old) old.replaceWith(el); else doc.querySelector('head')?.append(el);
+  }
   // Capítulos ya cargados: que lleven el estilo actual la próxima vez que se muestren
   function restyleLoadedSections() {
-    epub.spine.each((sec) => { const st = sec.document?.getElementById?.('rincon-user'); if (st) st.textContent = userCss(s); });
+    epub.spine.each((sec) => {
+      const doc = sec.document;
+      const st = doc?.getElementById?.('rincon-user');
+      if (!st) return;
+      st.textContent = userCss(s);
+      setFonts(doc, (tag) => doc.createElementNS(XHTML, tag));
+    });
   }
   function styleContents(contents) {
     const doc = contents.document;
-    if (!doc.getElementById('rincon-fonts')) {
-      const link = doc.createElement('link');
-      link.id = 'rincon-fonts'; link.rel = 'stylesheet'; link.href = fontsHref;
-      doc.head.append(link);
-    }
+    setFonts(doc, (tag) => doc.createElement(tag));
     let st = doc.getElementById('rincon-user');
     if (!st) { st = doc.createElement('style'); st.id = 'rincon-user'; doc.head.append(st); }
     st.textContent = userCss(s);
@@ -540,7 +564,7 @@ export async function renderReader(root, bookId) {
     const set = async (patch, rebuild = false) => {
       Object.assign(s, patch);
       await saveReaderSettings(s);
-      if ('font' in patch) await warmFont();
+      if ('font' in patch) await updateFonts();
       if ('fullscreen' in patch) { patch.fullscreen ? enterFullscreen() : exitFullscreen(); return; }
       if (rebuild) { const cfi = currentLoc?.start?.cfi; applyLook(); restyleLoadedSections(); await build(cfi); }
       else await refreshStyles();
