@@ -75,7 +75,7 @@ async function roomView(container, nav) {
     svg.setAttribute('viewBox', `${view.cx - w / 2} ${view.cy - hh / 2} ${w} ${hh}`);
   };
   const clampView = () => {
-    view.scale = Math.min(4, Math.max(0.8, view.scale));
+    view.scale = Math.min(Math.max(4, room.size / 2.5), Math.max(0.8, view.scale)); // en salas grandes se puede acercar más
     view.cx = Math.min(base.x + base.w, Math.max(base.x, view.cx));
     view.cy = Math.min(base.y + base.h, Math.max(base.y, view.cy));
   };
@@ -368,7 +368,7 @@ async function roomView(container, nav) {
     body.append(floors);
     body.append(h('label', { class: 'label' }, `Tamaño de la sala: ${room.size} × ${room.size}`));
     const sizes = h('div', { class: 'chips' });
-    for (const n of [6, 8, 10, 12]) sizes.append(h('button', { class: `chip ${room.size === n ? 'on' : ''}`, onclick: () => resize(n) }, `${n} × ${n}`));
+    for (const n of [6, 8, 10, 12, 14, 16, 20]) sizes.append(h('button', { class: `chip ${room.size === n ? 'on' : ''}`, onclick: () => resize(n) }, `${n} × ${n}`));
     body.append(sizes);
     const s = sheet(body, { title: 'La sala' });
     function resize(n) {
