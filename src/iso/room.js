@@ -90,6 +90,8 @@ export function canPlaceWall(room, it, wall, p) {
   if (p < 0 || p + c.span > room.size) return false;
   for (const o of room.items) {
     if (o.id === it.id || !catalogOf(o.type).wall || o.wall !== wall) continue;
+    // La guirnalda cuelga arriba del todo: puede pasar por encima de cuadros, ventanas y relojes
+    if (it.type === 'lights' || o.type === 'lights') continue;
     const os = catalogOf(o.type).span;
     if (p < o.p + os && p + c.span > o.p) return false;
   }
@@ -461,7 +463,9 @@ export function renderRoom(room, booksByShelf, { edit = false, selectedId = null
   const items = room.items;
   // Objetos de pared
   for (const it of items.filter((i) => catalogOf(i.type).wall)) {
-    s += `<g class="item ${it.id === selectedId ? 'selected' : ''}" data-id="${it.id}"><g transform="${wallTransform(it)}">${drawWallItem(it)}</g></g>`;
+    // Zona invisible para poder tocarlo con el dedo aunque el dibujo sea fino (la guirnalda)
+    const W = catalogOf(it.type).span * 32;
+    s += `<g class="item ${it.id === selectedId ? 'selected' : ''}" data-id="${it.id}"><g transform="${wallTransform(it)}"><rect x="0" y="-8" width="${W}" height="${it.type === 'lights' ? 34 : 24}" fill="#fff" fill-opacity="0"/>${drawWallItem(it)}</g></g>`;
   }
   // Alfombras
   for (const it of items.filter((i) => catalogOf(i.type).flat)) {
@@ -519,13 +523,14 @@ export function screenToFloor(sx, sy) {
   const a = sx / 32, b = sy / 16;
   return { x: (a + b) / 2, y: (b - a) / 2 };
 }
-export function screenToWall(sx, sy, N) {
+// loose: al arrastrar no exige que el dedo siga dentro de la pared (solo elige pared por el lado)
+export function screenToWall(sx, sy, N, loose = false) {
   if (sx >= 0) {
     const x = sx / 32, z = 16 * x - sy;
-    if (x >= 0 && x <= N && z >= 0 && z <= WALL_H) return { wall: 'b', p: Math.floor(x) };
+    if (loose || (x >= 0 && x <= N && z >= 0 && z <= WALL_H)) return { wall: 'b', p: Math.floor(x), t: x };
   } else {
     const y = -sx / 32, z = 16 * y - sy;
-    if (y >= 0 && y <= N && z >= 0 && z <= WALL_H) return { wall: 'a', p: Math.floor(y) };
+    if (loose || (y >= 0 && y <= N && z >= 0 && z <= WALL_H)) return { wall: 'a', p: Math.floor(y), t: y };
   }
   return null;
 }

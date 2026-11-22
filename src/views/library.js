@@ -114,6 +114,10 @@ async function roomView(container, nav) {
         const p = toSvg(e.clientX, e.clientY);
         const f = screenToFloor(p.x, p.y);
         gesture.drag = { it, ox: f.x - (it.x ?? 0), oy: f.y - (it.y ?? 0) };
+        if (catalogOf(it.type).wall) {
+          const w = screenToWall(p.x, p.y, room.size, true);
+          gesture.drag.wo = w.wall === it.wall ? w.t - it.p : catalogOf(it.type).span / 2;
+        }
       }
     } else if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
@@ -142,8 +146,11 @@ async function roomView(container, nav) {
       const p = toSvg(e.clientX, e.clientY);
       const it = gesture.drag.it;
       if (catalogOf(it.type).wall) {
-        const w = screenToWall(p.x, p.y, room.size);
-        if (w && canPlaceWall(room, it, w.wall, w.p) && (w.wall !== it.wall || w.p !== it.p)) { it.wall = w.wall; it.p = w.p; draw(); }
+        // Se mueve desde el punto por donde lo cogiste y no se sale de la pared
+        const w = screenToWall(p.x, p.y, room.size, true);
+        const span = catalogOf(it.type).span;
+        const np = Math.max(0, Math.min(room.size - span, Math.round(w.t - gesture.drag.wo)));
+        if ((w.wall !== it.wall || np !== it.p) && canPlaceWall(room, it, w.wall, np)) { it.wall = w.wall; it.p = np; draw(); }
       } else {
         const f = screenToFloor(p.x, p.y);
         const nx = Math.round(f.x - gesture.drag.ox), ny = Math.round(f.y - gesture.drag.oy);
