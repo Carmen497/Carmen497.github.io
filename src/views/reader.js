@@ -29,7 +29,6 @@ export const FONTS = [
   ['Andika', 'Andika', 'sans', 'Letras muy diferenciadas'],
   ['Open Sans', 'Open Sans', 'sans', 'Limpia y neutra'],
   ['Nunito', 'Nunito', 'sans', 'Redondeada y suave'],
-  ['OpenDyslexic', 'Dyslexic', 'sans', 'Para dislexia'],
   ['system-ui', 'La del móvil', 'sans', 'La letra del sistema'],
   ['original', 'Original del libro', '', 'La que trae el libro'],
 ];

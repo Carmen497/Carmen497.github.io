@@ -21,7 +21,6 @@ const fonts = [
   { pkg: 'open-sans', family: 'Open Sans' },
   { pkg: 'noto-serif', family: 'Noto Serif' },
   { pkg: 'source-serif-4', family: 'Source Serif 4' },
-  { pkg: 'opendyslexic', family: 'OpenDyslexic' },
   { pkg: 'bitter', family: 'Bitter' },
 ];
 

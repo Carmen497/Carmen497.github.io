@@ -91,7 +91,14 @@ export async function getGenres() { return cache.genres ||= await kvGet('genres'
 export async function saveGenres(g) { cache.genres = g; await kvSet('genres', g); }
 export function genreById(genres, id) { return genres.find((g) => g.id === id); }
 
-export async function getReaderSettings() { return cache.reader ||= { ...DEFAULT_READER, ...(await kvGet('reader', {})) }; }
+export async function getReaderSettings() {
+  if (!cache.reader) {
+    cache.reader = { ...DEFAULT_READER, ...(await kvGet('reader', {})) };
+    // Letras retiradas: quien las tuviera elegidas pasa a la predeterminada
+    if (cache.reader.font === 'OpenDyslexic') cache.reader.font = DEFAULT_READER.font;
+  }
+  return cache.reader;
+}
 export async function saveReaderSettings(s) { cache.reader = s; await kvSet('reader', s); }
 
 export async function getAppSettings() { return cache.app ||= { ...DEFAULT_APP, ...(await kvGet('app', {})) }; }
