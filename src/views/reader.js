@@ -2,7 +2,7 @@
 import ePub, { EpubCFI } from 'epubjs';
 import { h, icon, iconBtn, sheet, toast, stars, fmtDuration, todayKey, closeAllSheets } from '../ui.js';
 import { getBook, putBook, getFile, putFile, addDay } from '../db.js';
-import { repairEpub } from '../epubfix.js';
+import { repairEpub, REPAIR_VERSION } from '../epubfix.js';
 import { getReaderSettings, saveReaderSettings } from '../store.js';
 
 export const THEMES = {
@@ -123,11 +123,11 @@ export async function renderReader(root, bookId) {
   let file = await getFile(bookId);
   if (!book || !file) { toast('No se encontró el libro'); location.hash = '#/'; return; }
   // Una vez por libro: quitar caracteres que impiden abrir capítulos (PDF convertidos antes)
-  if (book.xmlOk !== 1) {
+  if (book.xmlOk !== REPAIR_VERSION) {
     try {
       const fixed = await repairEpub(file);
       if (fixed) { file = fixed; await putFile(bookId, fixed); book.locations = null; }
-      book.xmlOk = 1;
+      book.xmlOk = REPAIR_VERSION;
       await putBook(book);
     } catch (e) { console.warn('reparar epub', e); }
   }

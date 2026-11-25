@@ -1,5 +1,6 @@
 // Añadir libros: EPUB directamente, PDF convertido a EPUB.
 import { readEpubMeta } from './epubmeta.js';
+import { repairEpub, REPAIR_VERSION } from './epubfix.js';
 import { putBook, putFile, getBooks, takeInbox } from './db.js';
 import { pickShelf, colorFromImage, hashColor, shrinkImage, getGenres } from './store.js';
 import { h, sheet, toast } from './ui.js';
@@ -44,6 +45,8 @@ export async function importFiles(files) {
         file = await pdfToEpub(file, (p, m) => setP(p, prefix + m));
       }
       setP(0.95, `${prefix}Leyendo datos del libro…`);
+      // Capítulos mal formados (salían como página de error): se arreglan ya al añadir el libro
+      try { const fixed = await repairEpub(file); if (fixed) file = fixed; } catch (e) { console.warn('reparar epub', e); }
       const meta = await readEpubMeta(file);
       const dup = existing.find((b) => b.title.toLowerCase() === meta.title.toLowerCase() && (b.author || '') === (meta.author || ''));
       if (dup) { toast(`«${meta.title}» ya está en tu biblioteca`); continue; }
@@ -77,6 +80,7 @@ export async function importFiles(files) {
         cfi: null,
         readSeconds: 0,
         bookmarks: [],
+        xmlOk: REPAIR_VERSION,
       };
       book.shelfId = await pickShelf(book);
       await putFile(id, new Blob([file], { type: 'application/epub+zip' }));
