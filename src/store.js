@@ -1,5 +1,5 @@
 // Estado de la biblioteca: sala, estanterías, géneros y ajustes.
-import { kvGet, kvSet, getBooks } from './db.js';
+import { kvGet, kvSet } from './db.js';
 
 export const DEFAULT_GENRES = [
   { id: 'fantasia', name: 'Fantasía', color: '#7a5aa6' },
@@ -106,8 +106,6 @@ export async function saveAppSettings(s) { cache.app = s; await kvSet('app', s);
 
 export function clearCache() { cache = {}; }
 
-export const SHELF_CAPACITY = 48;
-
 // Vista de lista
 export const LIST_GROUPS = [['shelf', 'Por estantería (librería)'], ['genre', 'Por género'], ['saga', 'Por saga'], ['author', 'Por autor'], ['status', 'Por estado'], ['none', 'Sin agrupar']];
 export const LIST_SORTS = [['recent', 'Recientes'], ['added', 'Añadidos hace poco'], ['title', 'Título'], ['author', 'Autor'], ['rating', 'Valoración'], ['progress', 'Progreso']];
@@ -160,7 +158,8 @@ export function booksForShelves(items, books) {
   return map;
 }
 
-// Elige la estantería para un libro nuevo: la de su género, o la primera con hueco.
+// Elige la estantería para un libro nuevo: la de su género o, si no hay, la primera.
+// Las estanterías no se llenan nunca: caben todos los libros (en la sala solo se dibujan unos cuantos lomos).
 export async function pickShelf(book) {
   const list = (await shelves()).filter((s) => !s.auto);
   if (!list.length) return '';
@@ -168,9 +167,7 @@ export async function pickShelf(book) {
     const byGenre = list.find((s) => s.genre === book.genre);
     if (byGenre) return byGenre.id;
   }
-  const books = await getBooks();
-  const count = (id) => books.filter((b) => b.shelfId === id).length;
-  return (list.find((s) => count(s.id) < SHELF_CAPACITY) || list[0]).id;
+  return list[0].id;
 }
 
 // Color del lomo a partir de la portada
