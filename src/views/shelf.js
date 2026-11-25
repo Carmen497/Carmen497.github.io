@@ -1,7 +1,7 @@
 // Estantería abierta: sus libros, agrupados por saga.
 import { h, icon, btn, sheet, promptDialog, toast, escapeHtml } from '../ui.js';
 import { getBooks, putBook } from '../db.js';
-import { getRoom, saveRoom, getGenres, coverUrl, booksForShelves, AUTO_RULES, ruleLabel } from '../store.js';
+import { getRoom, saveRoom, allTags, tagKey, coverUrl, booksForShelves, AUTO_RULES, ruleLabel } from '../store.js';
 import { openBook } from './book.js';
 
 // origin: punto de la pantalla donde se tocó la estantería (la animación se abre desde ahí)
@@ -15,14 +15,15 @@ export async function openShelf(shelfId, { onChange, origin } = {}) {
   s.panel.style.transformOrigin = origin ? `${origin.x}px ${origin.y}px` : '50% 40%';
 
   async function draw() {
-    const genres = await getGenres();
-    const books = booksForShelves(room.items, await getBooks())[shelfId] || [];
+    const allBooks = await getBooks();
+    const tags = allTags(allBooks);
+    const books = booksForShelves(room.items, allBooks)[shelfId] || [];
     body.innerHTML = '';
 
     // Qué enseña esta estantería
     const ruleSel = h('select', { class: 'select small' },
       AUTO_RULES.map(([v, l]) => h('option', { value: v, selected: (shelf.auto || '') === v }, l)),
-      h('optgroup', { label: 'Un género' }, genres.map((g) => h('option', { value: `g:${g.id}`, selected: shelf.auto === `g:${g.id}` }, g.name))));
+      h('optgroup', { label: 'Los libros con un #' }, tags.map((t) => h('option', { value: `t:${t.name}`, selected: tagKey(shelf.auto?.startsWith('t:') ? shelf.auto.slice(2) : '') === t.key }, '#' + t.name))));
     ruleSel.addEventListener('change', async () => {
       shelf.auto = ruleSel.value;
       await saveRoom(room);
@@ -32,8 +33,8 @@ export async function openShelf(shelfId, { onChange, origin } = {}) {
 
     const genreSel = h('select', { class: 'select small' },
       h('option', { value: '' }, 'Ninguno'),
-      genres.map((g) => h('option', { value: g.id, selected: shelf.genre === g.id }, g.name)));
-    genreSel.addEventListener('change', async () => { shelf.genre = genreSel.value; await saveRoom(room); toast(shelf.genre ? 'Los libros nuevos de ese género vendrán aquí' : 'Sin género asignado'); });
+      tags.map((t) => h('option', { value: t.name, selected: tagKey(shelf.tag) === t.key }, '#' + t.name)));
+    genreSel.addEventListener('change', async () => { shelf.tag = genreSel.value; await saveRoom(room); toast(shelf.tag ? `Los libros nuevos con #${shelf.tag} vendrán aquí` : 'Sin # asignado'); });
 
     const tools = h('div', { class: `row gap wrap case-tools ${toolsOpen ? '' : 'hidden'}` },
       h('button', { class: 'pill', onclick: rename }, icon('edit', 16), 'Renombrar'),
@@ -42,7 +43,7 @@ export async function openShelf(shelfId, { onChange, origin } = {}) {
       shelf.auto ? null : h('button', { class: 'pill', onclick: addBooks }, icon('plus', 16), 'Traer libros'));
     body.append(h('div', { class: 'shelf-head' },
       h('div', { class: 'row gap center between' },
-        h('span', { class: 'muted' }, `${books.length} libro${books.length === 1 ? '' : 's'}${shelf.auto ? ` · ${ruleLabel(shelf.auto, genres)}` : ''}`),
+        h('span', { class: 'muted' }, `${books.length} libro${books.length === 1 ? '' : 's'}${shelf.auto ? ` · ${ruleLabel(shelf.auto)}` : ''}`),
         h('button', { class: 'pill', onclick: () => { toolsOpen = !toolsOpen; tools.classList.toggle('hidden', !toolsOpen); } }, icon('settings', 16), 'Opciones')),
       tools,
       shelf.auto === 'nuevos' && books.length ? h('div', { class: 'row gap center between new-hint' },
@@ -54,7 +55,7 @@ export async function openShelf(shelfId, { onChange, origin } = {}) {
     if (!books.length) {
       caseEl.append(h('div', { class: 'case-row empty' }, h('div', { class: 'empty-state' },
         shelf.auto
-          ? h('p', {}, `Aún no tienes libros que encajen aquí («${ruleLabel(shelf.auto, genres)}»). Aparecerán solos.`)
+          ? h('p', {}, `Aún no tienes libros que encajen aquí («${ruleLabel(shelf.auto)}»). Aparecerán solos.`)
           : [h('p', {}, 'Esta estantería está vacía.'), btn('Traer libros aquí', addBooks, 'primary')])),
         h('div', { class: 'case-row' }), h('div', { class: 'case-row' }));
       return;

@@ -547,3 +547,11 @@ body.dragging::after {
 .hl-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
 .hl-item-text { border-left: 4px solid; padding-left: 8px; font-style: italic; }
 .hl-item-note { font-size: .92rem; }
+
+/* ---------- # ---------- */
+.tag-editor { display: flex; flex-direction: column; gap: 8px; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-chips:empty { display: none; }
+.tag-chip { display: inline-flex; align-items: center; gap: 2px; padding: 5px 4px 5px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: .92rem; }
+.tag-x { width: 26px; height: 26px; border-radius: 50%; font-size: 1.1rem; line-height: 1; color: inherit; opacity: .8; }
+.tag-sugg:empty { display: none; }

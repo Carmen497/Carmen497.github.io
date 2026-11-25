@@ -1,6 +1,6 @@
-// Ajustes: apariencia, géneros, copias de seguridad y ayuda.
+// Ajustes: apariencia, #, copias de seguridad y ayuda.
 import { h, icon, btn, sheet, toast, confirmDialog, promptDialog } from '../ui.js';
-import { getAppSettings, saveAppSettings, getGenres, saveGenres, LIST_GROUPS, LIST_SORTS, getRoom, saveRoom } from '../store.js';
+import { getAppSettings, saveAppSettings, getGenres, saveGenres, allTags, tagKey, cleanTag, tagColor, LIST_GROUPS, LIST_SORTS, getRoom, saveRoom } from '../store.js';
 import { canPlace, catalogOf } from '../iso/room.js';
 import { getBooks, putBook, kvGet } from '../db.js';
 import {
@@ -41,7 +41,7 @@ export async function renderSettings(root) {
   }
   async function addNewShelf() {
     const room = await getRoom();
-    const item = { id: 'shelf-' + Date.now().toString(36), type: 'shelf', rot: 0, name: 'Libros nuevos', genre: '', auto: 'nuevos', color: catalogOf('shelf').color || '#8a5a3b' };
+    const item = { id: 'shelf-' + Date.now().toString(36), type: 'shelf', rot: 0, name: 'Libros nuevos', tag: '', auto: 'nuevos', color: catalogOf('shelf').color || '#8a5a3b' };
     for (const rot of [0, 1]) for (let y = 0; y < room.size; y++) for (let x = 0; x < room.size; x++) {
       if (canPlace(room, item, x, y, rot)) {
         Object.assign(item, { x, y, rot });
@@ -63,10 +63,10 @@ export async function renderSettings(root) {
     h('label', { class: 'label' }, 'Al abrir la app, ver'),
     pick([['room', 'La sala'], ['list', 'La lista']], app.libraryView || 'room', (v) => { app.libraryView = v; }),
     h('label', { class: 'label' }, 'En la lista, agrupar los libros'),
-    pick(LIST_GROUPS, app.listGroup || 'genre', (v) => { app.listGroup = v; }),
+    pick(LIST_GROUPS, app.listGroup || 'tag', (v) => { app.listGroup = v; }),
     h('label', { class: 'label' }, 'Y ordenarlos por'),
     pick(LIST_SORTS, app.listSort || 'recent', (v) => { app.listSort = v; }),
-    h('p', { class: 'muted small' }, 'La estantería «Libros nuevos» enseña todos los libros que vas añadiendo, sean del género que sean, hasta que les eliges su estantería. También puedes convertir cualquier estantería: ábrela → Opciones → Muestra: «Libros nuevos».'),
+    h('p', { class: 'muted small' }, 'La estantería «Libros nuevos» enseña todos los libros que vas añadiendo, lleven el # que lleven, hasta que les eliges su estantería. También puedes convertir cualquier estantería: ábrela → Opciones → Muestra: «Libros nuevos».'),
     newShelfBox));
 
   // Añadir libros
@@ -77,38 +77,64 @@ export async function renderSettings(root) {
       h('li', {}, h('strong', {}, 'Desde el móvil u ordenador: '), 'botón + de la biblioteca, o arrastra los archivos a la ventana.')),
     btn([icon('plus', 18), ' Elegir archivos'], pickFiles, 'ghost')));
 
-  // Géneros
+  // Mis #
   const genreList = h('div', { class: 'genre-list' });
   async function drawGenres() {
-    const genres = await getGenres();
     const books = await getBooks();
+    const tags = allTags(books);
+    const genres = await getGenres(); // aquí se guardan los colores de los #
     genreList.innerHTML = '';
-    for (const g of genres) {
-      const color = h('input', { type: 'color', value: g.color, class: 'color-input' });
-      const dot = h('label', { class: 'genre-dot', style: { background: g.color } }, color);
-      // El círculo cambia mientras eliges; al cerrar el selector se guarda
-      color.addEventListener('input', () => { g.color = color.value; dot.style.background = g.color; });
-      color.addEventListener('change', () => { g.color = color.value; dot.style.background = g.color; saveGenres(genres); toast('Color guardado'); });
-      const n = books.filter((b) => b.genre === g.id).length;
+    if (!tags.length) genreList.append(h('p', { class: 'muted small' }, 'Aún no has puesto ningún #. Abre un libro y escríbelos en su ficha.'));
+    for (const tg of tags) {
+      const col = await tagColor(tg.name);
+      const color = h('input', { type: 'color', value: col, class: 'color-input' });
+      const dot = h('label', { class: 'genre-dot', style: { background: col } }, color);
+      color.addEventListener('input', () => { dot.style.background = color.value; });
+      color.addEventListener('change', async () => {
+        const g = genres.find((x) => tagKey(x.name) === tg.key);
+        if (g) g.color = color.value; else genres.push({ id: 'g-' + Date.now().toString(36), name: tg.name, color: color.value });
+        await saveGenres(genres); toast('Color guardado');
+      });
       genreList.append(h('div', { class: 'genre-row' },
         dot,
-        h('span', { class: 'grow' }, g.name, h('span', { class: 'muted small' }, ` · ${n}`)),
-        h('button', { class: 'icon-btn', title: 'Renombrar', onclick: async () => { const name = await promptDialog('Nombre del género', g.name); if (name) { g.name = name; await saveGenres(genres); drawGenres(); } } }, icon('edit', 18)),
-        h('button', { class: 'icon-btn', title: 'Eliminar', onclick: async () => {
-          if (!(await confirmDialog(`¿Eliminar el género «${g.name}»?${n ? ` ${n} libro(s) quedarán sin género.` : ''}`, { ok: 'Eliminar', danger: true }))) return;
-          for (const b of books.filter((b) => b.genre === g.id)) { b.genre = ''; await putBook(b); }
-          await saveGenres(genres.filter((x) => x.id !== g.id)); drawGenres();
+        h('span', { class: 'grow' }, '#' + tg.name, h('span', { class: 'muted small' }, ` · ${tg.count}`)),
+        h('button', { class: 'icon-btn', title: 'Renombrar', onclick: async () => {
+          const name = cleanTag(await promptDialog('Nuevo nombre del #', tg.name) || '');
+          if (!name || name === tg.name) return;
+          await renameTag(books, tg, name, genres); drawGenres();
+        } }, icon('edit', 18)),
+        h('button', { class: 'icon-btn', title: 'Quitar', onclick: async () => {
+          if (!(await confirmDialog(`¿Quitar #${tg.name} de ${tg.count} libro(s)?`, { ok: 'Quitar', danger: true }))) return;
+          await renameTag(books, tg, '', genres); drawGenres();
         } }, icon('trash', 18))));
     }
-    genreList.append(btn([icon('plus', 18), ' Nuevo género'], async () => {
-      const name = await promptDialog('Nombre del nuevo género');
-      if (!name) return;
-      genres.push({ id: 'g-' + Date.now().toString(36), name, color: '#' + Math.floor(Math.random() * 0x777777 + 0x444444).toString(16) });
-      await saveGenres(genres); drawGenres();
-    }, 'ghost'));
+  }
+  // Cambia (o quita, si name está vacío) un # en todos los libros y estanterías
+  async function renameTag(books, tg, name, genres) {
+    for (const b of books) {
+      if (!(b.tags || []).some((x) => tagKey(x) === tg.key)) continue;
+      const out = [];
+      for (const x of b.tags) {
+        const n = tagKey(x) === tg.key ? name : x;
+        if (n && !out.some((y) => tagKey(y) === tagKey(n))) out.push(n);
+      }
+      b.tags = out;
+      await putBook(b);
+    }
+    const room = await getRoom();
+    for (const it of room.items) {
+      if (it.type !== 'shelf') continue;
+      if (tagKey(it.tag) === tg.key) it.tag = name;
+      if (it.auto?.startsWith('t:') && tagKey(it.auto.slice(2)) === tg.key) it.auto = name ? 't:' + name : '';
+    }
+    await saveRoom(room);
+    const g = genres.find((x) => tagKey(x.name) === tg.key);
+    if (g && name) { g.name = name; await saveGenres(genres); }
+    toast(name ? `Ahora es #${name}` : `#${tg.name} quitado`);
+    window.dispatchEvent(new CustomEvent('library-changed'));
   }
   drawGenres();
-  page.append(section('Mis géneros', h('p', { class: 'muted small' }, 'Tú decides los géneros. Cada estantería puede recibir automáticamente los libros nuevos de un género.'), genreList));
+  page.append(section('Mis #', h('p', { class: 'muted small' }, 'Los # se escriben en la ficha de cada libro (un libro puede tener muchos). Aquí puedes cambiarles el color, renombrarlos o quitarlos de todos los libros a la vez. Para buscar por #, escribe # en el buscador.'), genreList));
 
   // Copia de seguridad en Google Drive
   const driveBox = h('div', { class: 'stack' });

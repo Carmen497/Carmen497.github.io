@@ -1,10 +1,48 @@
-// Ficha del libro: valoración, estado, género, saga, estantería, sinopsis y notas.
+// Ficha del libro: valoración, estado, #, saga, estantería, sinopsis y notas.
 import { h, icon, btn, sheet, stars, toast, confirmDialog, promptDialog, closeAllSheets, fmtDuration, escapeHtml } from '../ui.js';
 import { getBook, putBook, deleteBook, getBooks, getFile } from '../db.js';
-import { getGenres, saveGenres, getRoom, coverUrl, colorFromImage, shrinkImage } from '../store.js';
+import { allTags, addTag, tagKey, getRoom, coverUrl, colorFromImage, shrinkImage } from '../store.js';
 import { searchOnline, fetchImage } from '../online.js';
 
 const STATUS = [['pendiente', 'Pendiente'], ['leyendo', 'Leyendo'], ['leido', 'Leído'], ['abandonado', 'Abandonado']];
+
+// Editor de #: los del libro como fichas (con × para quitarlos) y un campo que sugiere mientras escribes
+function tagInput(book, known, onChange) {
+  const wrap = h('div', { class: 'tag-editor' });
+  const chipsEl = h('div', { class: 'tag-chips' });
+  const input = h('input', { class: 'input tag-in', placeholder: 'Escribe un # y pulsa Intro', autocomplete: 'off', autocapitalize: 'off', enterkeyhint: 'done' });
+  const sugg = h('div', { class: 'chips tag-sugg' });
+  wrap.append(chipsEl, input, sugg);
+  const drawChips = () => {
+    chipsEl.innerHTML = '';
+    for (const t of book.tags || []) {
+      chipsEl.append(h('span', { class: 'tag-chip' }, '#' + t,
+        h('button', { class: 'tag-x', title: 'Quitar', onclick: () => { book.tags = book.tags.filter((x) => x !== t); onChange(); drawChips(); drawSugg(); } }, '×')));
+    }
+  };
+  const add = (t) => {
+    if (addTag(book, t)) { onChange(); drawChips(); }
+    input.value = ''; drawSugg(); input.focus();
+  };
+  const drawSugg = () => {
+    const q = tagKey(input.value);
+    const mine = new Set((book.tags || []).map(tagKey));
+    const list = known.filter((t) => !mine.has(t.key) && (!q || t.key.includes(q)))
+      .sort((a, b) => (q ? (b.key.startsWith(q) - a.key.startsWith(q)) : 0) || b.count - a.count).slice(0, 12);
+    sugg.innerHTML = '';
+    for (const t of list) sugg.append(h('button', { class: 'chip', onclick: () => add(t.name) }, '#' + t.name, h('span', { class: 'muted small' }, ' ' + t.count)));
+    if (q && !known.some((t) => t.key === q) && !mine.has(q)) sugg.append(h('button', { class: 'chip on', onclick: () => add(input.value) }, '+ Crear #' + input.value.replace(/#/g, '').trim()));
+  };
+  input.addEventListener('input', () => {
+    // Una coma también confirma el #
+    if (input.value.includes(',')) { const parts = input.value.split(','); parts.slice(0, -1).forEach((p) => addTag(book, p)); onChange(); drawChips(); input.value = parts.at(-1); }
+    drawSugg();
+  });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (input.value.trim()) add(input.value); } });
+  input.addEventListener('blur', () => setTimeout(() => { if (input.value.trim() && document.activeElement !== input) add(input.value); }, 200));
+  drawChips(); drawSugg();
+  return wrap;
+}
 
 export async function openBook(id, { onChange } = {}) {
   let book = await getBook(id);
@@ -21,7 +59,6 @@ export async function openBook(id, { onChange } = {}) {
   };
 
   async function draw() {
-    const genres = await getGenres();
     const room = await getRoom();
     const all = await getBooks();
     const sagas = [...new Set(all.map((b) => b.saga).filter(Boolean))].sort();
@@ -56,21 +93,8 @@ export async function openBook(id, { onChange } = {}) {
         save(); draw();
       } }, l)));
 
-    // Género
-    const genreSel = h('select', { class: 'select' }, h('option', { value: '' }, 'Sin género'),
-      genres.map((g) => h('option', { value: g.id, selected: book.genre === g.id }, g.name)),
-      h('option', { value: '__new' }, '+ Nuevo género…'));
-    genreSel.addEventListener('change', async () => {
-      if (genreSel.value === '__new') {
-        const name = await promptDialog('Nombre del nuevo género');
-        if (name) {
-          const g = { id: 'g-' + Date.now().toString(36), name, color: '#' + Math.floor(Math.random() * 0x777777 + 0x444444).toString(16) };
-          genres.push(g); await saveGenres(genres); book.genre = g.id;
-        }
-        save(); draw(); return;
-      }
-      book.genre = genreSel.value; save();
-    });
+    // # del libro: escribes y van saliendo los que ya usas
+    const tagEditor = tagInput(book, allTags(all.filter((b) => b.id !== book.id)), save);
 
     // Saga
     const dl = h('datalist', { id: 'sagas-list' }, sagas.map((x) => h('option', { value: x })));
@@ -85,8 +109,8 @@ export async function openBook(id, { onChange } = {}) {
 
     body.append(
       h('section', { class: 'field' }, h('label', { class: 'label' }, 'Estado'), statusRow),
+      h('section', { class: 'field' }, h('label', { class: 'label' }, '#'), tagEditor),
       h('div', { class: 'grid2' },
-        h('section', { class: 'field' }, h('label', { class: 'label' }, 'Género'), genreSel),
         h('section', { class: 'field' }, h('label', { class: 'label' }, 'Estantería'), shelfSel,
           book.nuevo ? h('button', { class: 'pill small-pill', onclick: (e) => { book.nuevo = false; save(); e.currentTarget.remove(); toast('Colocado: ya no sale en «Libros nuevos»'); } }, icon('check', 16), 'Dejarlo aquí') : null)),
       h('section', { class: 'field' }, h('label', { class: 'label' }, 'Saga'), h('div', { class: 'row gap' }, sagaIn, sagaNum), dl));

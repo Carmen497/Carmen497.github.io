@@ -1,13 +1,13 @@
 // Estadísticas de lectura.
 import { h, fmtDuration, todayKey, escapeHtml } from '../ui.js';
 import { getBooks, getDays } from '../db.js';
-import { getGenres, genreById, getAppSettings, saveAppSettings } from '../store.js';
+import { tagColor, getAppSettings, saveAppSettings } from '../store.js';
 import { openBook } from './book.js';
 
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 export async function renderStats(root) {
-  const [books, days, genres, app] = await Promise.all([getBooks(), getDays(), getGenres(), getAppSettings()]);
+  const [books, days, app] = await Promise.all([getBooks(), getDays(), getAppSettings()]);
   const byDate = Object.fromEntries(days.map((d) => [d.date, d]));
   const now = new Date();
   const year = now.getFullYear();
@@ -73,22 +73,22 @@ export async function renderStats(root) {
   const perMonth = MONTHS.map((m, i) => ({ label: m, full: `${m} ${year}`, value: finishedYear.filter((b) => new Date(b.finishedAt).getMonth() === i).length }));
   page.append(h('section', { class: 'card' }, h('h3', {}, `Libros terminados en ${year}`), barChart(perMonth, { unit: 'libros', every: 1, integer: true })));
 
-  // Por género (tiempo de lectura)
+  // Por # (tiempo de lectura; un libro con varios # suma en cada uno)
   const genreTime = new Map();
   for (const b of books) {
     if (!b.readSeconds) continue;
-    const g = genreById(genres, b.genre);
-    const key = g?.name || 'Sin género';
-    const prev = genreTime.get(key) || { value: 0, color: g?.color || '#9a8f80' };
-    prev.value += b.readSeconds; genreTime.set(key, prev);
+    for (const t of b.tags?.length ? b.tags.map((x) => '#' + x) : ['Sin #']) {
+      const prev = genreTime.get(t) || { value: 0, color: t === 'Sin #' ? '#9a8f80' : await tagColor(t.slice(1)) };
+      prev.value += b.readSeconds; genreTime.set(t, prev);
+    }
   }
   const gArr = [...genreTime.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.value - a.value);
   const maxG = Math.max(1, ...gArr.map((g) => g.value));
-  page.append(h('section', { class: 'card' }, h('h3', {}, 'Tiempo por género'),
+  page.append(h('section', { class: 'card' }, h('h3', {}, 'Tiempo por #'),
     gArr.length ? h('div', { class: 'hbars' }, gArr.map((g) => h('div', { class: 'hbar', title: `${g.name}: ${fmtDuration(g.value)}` },
       h('span', { class: 'hbar-label' }, g.name),
       h('div', { class: 'hbar-track' }, h('div', { class: 'hbar-fill', style: { width: `${(g.value / maxG) * 100}%`, background: g.color } })),
-      h('span', { class: 'hbar-val' }, fmtDuration(g.value))))) : h('p', { class: 'muted' }, 'Cuando leas, aquí verás en qué géneros pasas más tiempo.')));
+      h('span', { class: 'hbar-val' }, fmtDuration(g.value))))) : h('p', { class: 'muted' }, 'Cuando leas, aquí verás con qué # pasas más tiempo.')));
 
   // Más leídos
   const top = books.filter((b) => b.readSeconds).sort((a, b) => b.readSeconds - a.readSeconds).slice(0, 5);

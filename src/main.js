@@ -1,6 +1,6 @@
 import './styles.css';
 import { h, icon, closeTopSheet, toast } from './ui.js';
-import { getAppSettings } from './store.js';
+import { getAppSettings, migrateGenresToTags } from './store.js';
 import { processInbox, setupLaunchQueue, setupDropZone } from './importer.js';
 import { backupToDrive, driveTokenValid, needsBackup } from './backup.js';
 
@@ -123,6 +123,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   const app = await getAppSettings();
   applyAppTheme(app.theme);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => applyAppTheme((await getAppSettings()).theme));
+  try { await migrateGenresToTags(); } catch (e) { console.warn('géneros a #', e); }
   setupLaunchQueue();
   setupDropZone();
   const params = new URLSearchParams(location.search);

@@ -2,24 +2,28 @@
 import { readEpubMeta } from './epubmeta.js';
 import { repairEpub, REPAIR_VERSION } from './epubfix.js';
 import { putBook, putFile, getBooks, takeInbox } from './db.js';
-import { pickShelf, colorFromImage, hashColor, shrinkImage, getGenres } from './store.js';
+import { pickShelf, colorFromImage, hashColor, shrinkImage, allTags, tagKey } from './store.js';
 import { h, sheet, toast } from './ui.js';
 
 const isPdf = (f) => /pdf/i.test(f.type) || /\.pdf$/i.test(f.name);
 const isEpub = (f) => /epub/i.test(f.type) || /\.epub$/i.test(f.name);
 
-// Intenta reconocer un género a partir de las materias del libro
-async function guessGenre(subjects) {
+// Si las materias del libro encajan con un # que ya usas (Fantasía, Romance…), se le pone
+async function guessTags(subjects) {
   const s = subjects.join(' ').toLowerCase();
   const map = [
-    ['fantasia', /fantas/], ['scifi', /ciencia ficci|science fiction|sci-fi|scifi/], ['romance', /romance|romántic|romantic|amor/],
+    ['fantasia', /fantas/], ['ciencia ficcion', /ciencia ficci|science fiction|sci-fi|scifi/], ['romance', /romance|romántic|romantic|amor/],
     ['thriller', /thriller|suspense/], ['misterio', /misterio|mystery|policiac|detective|crime|crimen|negra/],
     ['historica', /hist[oó]ric/], ['juvenil', /juvenil|young adult|infantil/], ['poesia', /poes|poetry/],
-    ['clasicos', /cl[aá]sic/], ['noficcion', /ensayo|biograf|non-fiction|nonfiction|autoayuda|divulga/],
+    ['clasicos', /cl[aá]sic/], ['no ficcion', /ensayo|biograf|non-fiction|nonfiction|autoayuda|divulga/],
   ];
-  const genres = await getGenres();
-  for (const [id, re] of map) if (re.test(s) && genres.some((g) => g.id === id)) return id;
-  return '';
+  const mine = allTags(await getBooks());
+  const out = [];
+  for (const [k, re] of map) {
+    const t = re.test(s) && mine.find((x) => x.key === tagKey(k));
+    if (t) out.push(t.name);
+  }
+  return out;
 }
 
 export async function importFiles(files) {
@@ -65,7 +69,7 @@ export async function importFiles(files) {
         isbn: meta.isbn,
         saga: meta.saga,
         sagaIndex: meta.sagaIndex,
-        genre: await guessGenre(meta.subjects),
+        tags: await guessTags(meta.subjects || []),
         rating: 0,
         status: 'pendiente',
         notes: '',

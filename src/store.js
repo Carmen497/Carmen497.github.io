@@ -1,5 +1,5 @@
 // Estado de la biblioteca: sala, estanterías, géneros y ajustes.
-import { kvGet, kvSet } from './db.js';
+import { kvGet, kvSet, getBooks, putBook } from './db.js';
 
 export const DEFAULT_GENRES = [
   { id: 'fantasia', name: 'Fantasía', color: '#7a5aa6' },
@@ -57,9 +57,9 @@ export function defaultRoom() {
     wall: '#e9d8c0',
     floor: 'wood',
     items: [
-      { id: 'shelf-1', type: 'shelf', x: 1, y: 0, rot: 0, name: 'Mis favoritos', genre: '', color: '#8a5a3b' },
-      { id: 'shelf-2', type: 'shelf', x: 4, y: 0, rot: 0, name: 'Pendientes', genre: '', auto: 'pendiente', color: '#8a5a3b' },
-      { id: 'shelf-3', type: 'shelf', x: 0, y: 3, rot: 1, name: 'Sagas', genre: '', auto: 'saga', color: '#8a5a3b' },
+      { id: 'shelf-1', type: 'shelf', x: 1, y: 0, rot: 0, name: 'Mis favoritos', tag: '', color: '#8a5a3b' },
+      { id: 'shelf-2', type: 'shelf', x: 4, y: 0, rot: 0, name: 'Pendientes', tag: '', auto: 'pendiente', color: '#8a5a3b' },
+      { id: 'shelf-3', type: 'shelf', x: 0, y: 3, rot: 1, name: 'Sagas', tag: '', auto: 'saga', color: '#8a5a3b' },
       { id: 'win-1', type: 'window', wall: 'b', p: 6 },
       { id: 'paint-1', type: 'painting', wall: 'a', p: 1, color: '#6d9a8b' },
       { id: 'clock-1', type: 'clock', wall: 'b', p: 3 },
@@ -91,6 +91,63 @@ export async function getGenres() { return cache.genres ||= await kvGet('genres'
 export async function saveGenres(g) { cache.genres = g; await kvSet('genres', g); }
 export function genreById(genres, id) { return genres.find((g) => g.id === id); }
 
+// ---- # (etiquetas) ----
+// Un libro puede llevar muchos #. Se guardan sin la almohadilla; mayúsculas y tildes no cuentan para comparar.
+const fold = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+export const cleanTag = (t) => String(t || '').replace(/#/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+export const tagKey = (t) => fold(cleanTag(t));
+export const hasTag = (b, key) => (b.tags || []).some((t) => tagKey(t) === key);
+// Todos los # de la biblioteca, los más usados primero
+export function allTags(books) {
+  const m = new Map();
+  for (const b of books) for (const t of b.tags || []) {
+    const k = tagKey(t);
+    if (!k) continue;
+    const e = m.get(k) || { key: k, name: cleanTag(t), count: 0 };
+    e.count++; m.set(k, e);
+  }
+  return [...m.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+export function addTag(book, t) {
+  const name = cleanTag(t), k = tagKey(name);
+  if (!k || hasTag(book, k)) return false;
+  (book.tags ||= []).push(name);
+  return true;
+}
+
+// Los géneros de antes pasan a ser # (se puede ejecutar siempre: solo cambia lo que quede por pasar,
+// p. ej. al restaurar una copia antigua)
+export async function migrateGenresToTags() {
+  const genres = await getGenres();
+  const name = (id) => genreById(genres, id)?.name || '';
+  for (const b of await getBooks()) {
+    if (b.genre === undefined) continue;
+    const n = name(b.genre);
+    if (n) addTag(b, n);
+    b.tags ||= [];
+    delete b.genre;
+    await putBook(b);
+  }
+  const room = await getRoom();
+  let roomChanged = false;
+  for (const it of room.items) {
+    if (it.type !== 'shelf') continue;
+    if (it.auto?.startsWith('g:')) { const n = name(it.auto.slice(2)); it.auto = n ? 't:' + cleanTag(n) : ''; roomChanged = true; }
+    if (it.genre !== undefined) { const n = name(it.genre); if (n && !it.tag) it.tag = cleanTag(n); delete it.genre; roomChanged = true; }
+  }
+  if (roomChanged) await saveRoom(room);
+  const app = await getAppSettings();
+  let appChanged = false;
+  if (app.listFilter?.startsWith('g:')) { const n = name(app.listFilter.slice(2)); app.listFilter = n ? 't:' + cleanTag(n) : 'all'; appChanged = true; }
+  if (app.listGroup === 'genre') { app.listGroup = 'tag'; appChanged = true; }
+  if (appChanged) await saveAppSettings(app);
+}
+// Color de un #: el del género del que viene, o uno fijo según el nombre
+export async function tagColor(name) {
+  const g = (await getGenres()).find((x) => tagKey(x.name) === tagKey(name));
+  return g?.color || hashColor(name);
+}
+
 export async function getReaderSettings() {
   if (!cache.reader) {
     cache.reader = { ...DEFAULT_READER, ...(await kvGet('reader', {})) };
@@ -107,7 +164,7 @@ export async function saveAppSettings(s) { cache.app = s; await kvSet('app', s);
 export function clearCache() { cache = {}; }
 
 // Vista de lista
-export const LIST_GROUPS = [['shelf', 'Por estantería (librería)'], ['genre', 'Por género'], ['saga', 'Por saga'], ['author', 'Por autor'], ['status', 'Por estado'], ['none', 'Sin agrupar']];
+export const LIST_GROUPS = [['shelf', 'Por estantería (librería)'], ['tag', 'Por #'], ['saga', 'Por saga'], ['author', 'Por autor'], ['status', 'Por estado'], ['none', 'Sin agrupar']];
 export const LIST_SORTS = [['recent', 'Recientes'], ['added', 'Añadidos hace poco'], ['title', 'Título'], ['author', 'Autor'], ['rating', 'Valoración'], ['progress', 'Progreso']];
 
 
@@ -119,15 +176,15 @@ export async function shelves() {
 // Una estantería puede guardar los libros que tú pones (auto = '') o enseñar sola los que cumplen una regla.
 export const AUTO_RULES = [
   ['', 'Los libros que yo ponga'],
-  ['nuevos', 'Libros nuevos (todos los géneros)'],
+  ['nuevos', 'Libros nuevos (todos los #)'],
   ['pendiente', 'Pendientes (sin terminar)'],
   ['leyendo', 'Leyendo ahora'],
   ['leido', 'Leídos'],
   ['favoritos', 'Favoritos (4 ★ o más)'],
   ['saga', 'Libros de sagas'],
 ];
-export function ruleLabel(auto, genres = []) {
-  if (auto?.startsWith('g:')) return `Género: ${genreById(genres, auto.slice(2))?.name || '—'}`;
+export function ruleLabel(auto) {
+  if (auto?.startsWith('t:')) return `#${auto.slice(2)}`;
   return AUTO_RULES.find(([v]) => v === auto)?.[1] || '';
 }
 function matchesRule(b, auto) {
@@ -138,7 +195,7 @@ function matchesRule(b, auto) {
     case 'leido': return b.status === 'leido';
     case 'favoritos': return (b.rating || 0) >= 4;
     case 'saga': return !!b.saga;
-    default: return auto?.startsWith('g:') ? b.genre === auto.slice(2) : false;
+    default: return auto?.startsWith('t:') ? hasTag(b, tagKey(auto.slice(2))) : false;
   }
 }
 // Libros que se ven en cada estantería. Los que no tienen una estantería «normal» válida
@@ -158,15 +215,13 @@ export function booksForShelves(items, books) {
   return map;
 }
 
-// Elige la estantería para un libro nuevo: la de su género o, si no hay, la primera.
+// Elige la estantería para un libro nuevo: la de uno de sus # o, si no hay, la primera.
 // Las estanterías no se llenan nunca: caben todos los libros (en la sala solo se dibujan unos cuantos lomos).
 export async function pickShelf(book) {
   const list = (await shelves()).filter((s) => !s.auto);
   if (!list.length) return '';
-  if (book.genre) {
-    const byGenre = list.find((s) => s.genre === book.genre);
-    if (byGenre) return byGenre.id;
-  }
+  const byTag = list.find((s) => s.tag && hasTag(book, tagKey(s.tag)));
+  if (byTag) return byTag.id;
   return list[0].id;
 }
 

@@ -2,7 +2,7 @@
 import { h, icon, iconBtn, btn, toast, sheet, promptDialog, confirmDialog, escapeHtml } from '../ui.js';
 import { getBooks, putBook } from '../db.js';
 import {
-  getRoom, saveRoom, getGenres, genreById, getAppSettings, saveAppSettings, sortBooksForShelf, coverUrl, booksForShelves, LIST_GROUPS, LIST_SORTS,
+  getRoom, saveRoom, allTags, hasTag, tagKey, getAppSettings, saveAppSettings, sortBooksForShelf, coverUrl, booksForShelves, LIST_GROUPS, LIST_SORTS,
 } from '../store.js';
 import {
   renderRoom, roomViewBox, screenToFloor, screenToWall, CATALOG, catalogOf, canPlace, canPlaceWall,
@@ -193,7 +193,7 @@ async function roomView(container, nav) {
     if (placing) {
       const c = catalogOf(placing.type);
       const item = { id: placing.type + '-' + Date.now().toString(36), type: placing.type, rot: 0, color: c.color };
-      if (placing.type === 'shelf') { item.name = 'Nueva estantería'; item.genre = ''; }
+      if (placing.type === 'shelf') { item.name = 'Nueva estantería'; item.tag = ''; }
       if (c.wall) {
         const w = screenToWall(p.x, p.y, room.size);
         if (!w) return toast('Toca una pared para colgarlo');
@@ -398,11 +398,11 @@ export { STATUS };
 
 async function listView(container, nav) {
   const books = await getBooks();
-  const genres = await getGenres();
+  const tags = allTags(books);
   const room = await getRoom();
   const app = await getAppSettings();
   let filter = app.listFilter || 'all';
-  let group = app.listGroup || 'genre';
+  let group = app.listGroup || 'tag';
   let sort = app.listSort || 'recent';
 
   const chips = h('div', { class: 'chips scroll' });
@@ -414,7 +414,7 @@ async function listView(container, nav) {
 
   function renderChips() {
     chips.innerHTML = '';
-    const opts = [['all', 'Todos'], ...(books.some((b) => b.nuevo) ? [['nuevos', `Nuevos · ${books.filter((b) => b.nuevo).length}`]] : []), ['leyendo', 'Leyendo'], ['pendiente', 'Pendientes'], ['leido', 'Leídos'], ...genres.map((g) => ['g:' + g.id, g.name])];
+    const opts = [['all', 'Todos'], ...(books.some((b) => b.nuevo) ? [['nuevos', `Nuevos · ${books.filter((b) => b.nuevo).length}`]] : []), ['leyendo', 'Leyendo'], ['pendiente', 'Pendientes'], ['leido', 'Leídos'], ...tags.map((t) => ['t:' + t.name, '#' + t.name])];
     for (const [id, label] of opts) {
       chips.append(h('button', { class: `chip ${filter === id ? 'on' : ''}`, onclick: () => { filter = id; app.listFilter = id; saveAppSettings(app); renderChips(); draw(); } }, label));
     }
@@ -422,7 +422,7 @@ async function listView(container, nav) {
 
   function draw() {
     list.innerHTML = '';
-    let arr = books.filter((b) => filter === 'all' || (filter === 'nuevos' ? b.nuevo : filter.startsWith('g:') ? b.genre === filter.slice(2) : b.status === filter));
+    let arr = books.filter((b) => filter === 'all' || (filter === 'nuevos' ? b.nuevo : filter.startsWith('t:') ? hasTag(b, tagKey(filter.slice(2))) : b.status === filter));
     const cmp = {
       recent: (a, b) => (b.lastOpenedAt || b.addedAt) - (a.lastOpenedAt || a.addedAt),
       added: (a, b) => (b.addedAt || 0) - (a.addedAt || 0),
@@ -441,17 +441,22 @@ async function listView(container, nav) {
     const manualShelves = room.items.filter((i) => i.type === 'shelf' && !i.auto);
     const shelfRank = (name) => { const i = manualShelves.findIndex((s) => s.name === name); return i < 0 ? 999 : i; };
     const keyOf = (b) => {
-      if (group === 'genre') return genreById(genres, b.genre)?.name || 'Sin género';
       if (group === 'saga') return b.saga || 'Libros independientes';
       if (group === 'shelf') return (manualShelves.find((s) => s.id === b.shelfId) || manualShelves[0])?.name || 'Sin estantería';
       if (group === 'author') return b.author || 'Autor desconocido';
       if (group === 'status') return STATUS[b.status] || 'Pendiente';
       return '';
     };
-    for (const b of arr) { const k = keyOf(b); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(b); }
+    const put = (k, b) => { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(b); };
+    for (const b of arr) {
+      // Con «Por #» un libro sale en cada uno de sus #
+      if (group === 'tag') { if (b.tags?.length) b.tags.forEach((t) => put('#' + t, b)); else put('Sin #', b); }
+      else put(keyOf(b), b);
+    }
     const keys = [...groups.keys()].sort((a, b) => {
       if (group === 'shelf') return shelfRank(a) - shelfRank(b);
       const last = /^(Sin |Libros independientes|Autor desconocido)/;
+      if (group === 'tag' && last.test(a) === last.test(b)) return groups.get(b).length - groups.get(a).length || a.localeCompare(b);
       if (last.test(a) !== last.test(b)) return last.test(a) ? 1 : -1;
       return a.localeCompare(b);
     });
