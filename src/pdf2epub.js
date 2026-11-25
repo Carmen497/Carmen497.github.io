@@ -1,11 +1,12 @@
 // Convierte un PDF de texto en un EPUB reflowable (se adapta a la pantalla y a tus ajustes).
 import JSZip from 'jszip';
+import { XML_BAD } from './epubfix.js';
 import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const esc = (s) => String(s).replace(XML_BAD, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function median(arr) {
   if (!arr.length) return 0;
@@ -13,32 +14,66 @@ function median(arr) {
   return s[Math.floor(s.length / 2)];
 }
 
-// Agrupa los fragmentos de texto de una página en líneas
-function toLines(items) {
+// Agrupa los fragmentos de texto de una página en filas (todavía sin unir)
+function groupRows(items) {
   const rows = [];
   for (const it of items) {
-    if (!it.str || !it.str.trim()) { if (it.hasEOL && rows.length) rows[rows.length - 1].eol = true; continue; }
+    if (!it.str || !it.str.trim()) continue;
     const x = it.transform[4], y = it.transform[5];
     const size = Math.abs(it.transform[3]) || it.height || 10;
-    let row = rows.find((r) => Math.abs(r.y - y) < size * 0.45);
-    if (!row) { row = { y, x, size, parts: [] }; rows.push(row); }
-    row.parts.push({ x, str: it.str, w: it.width });
-    row.x = Math.min(row.x, x);
-    row.size = Math.max(row.size, size);
+    let row = rows.find((r) => Math.abs(r.y - y) < Math.min(size, r.base) * 0.45);
+    if (!row) { row = { y, base: size, parts: [] }; rows.push(row); }
+    row.parts.push({ x, y, str: it.str.replace(XML_BAD, ''), w: it.width || 0, size });
   }
-  rows.sort((a, b) => b.y - a.y);
-  for (const r of rows) {
-    r.parts.sort((a, b) => a.x - b.x);
-    let text = '', lastEnd = null;
-    for (const p of r.parts) {
-      if (lastEnd != null && p.x - lastEnd > r.size * 0.2 && !text.endsWith(' ') && !p.str.startsWith(' ')) text += ' ';
-      text += p.str;
-      lastEnd = p.x + (p.w || 0);
+  return rows;
+}
+
+// Une los fragmentos de una fila en una línea de texto
+function finishRow(r) {
+  r.parts.sort((a, b) => a.x - b.x);
+  let text = r.prefix || '', last = null;
+  const bySize = new Map();
+  for (const p of r.parts) {
+    // El hueco entre palabras se mide con la letra de cada trozo, no con la más grande de la fila
+    // (una letra capital enorme hacía que se perdieran los espacios: «Aveníanentrelaceremonia»)
+    if (last && p.x - (last.x + last.w) > Math.min(last.size, p.size) * 0.2 && !/\s$/.test(text) && !/^\s/.test(p.str)) text += ' ';
+    text += p.str;
+    last = p;
+    const k = Math.round(p.size * 10) / 10;
+    bySize.set(k, (bySize.get(k) || 0) + p.str.trim().length);
+  }
+  r.text = text.replace(/\s+/g, ' ').trim();
+  r.x = r.parts[0].x;
+  r.right = last ? last.x + last.w : r.x;
+  // Tamaño de la fila = el de la mayoría de sus letras
+  r.size = [...bySize].sort((a, b) => b[1] - a[1])[0][0];
+  return r;
+}
+
+// Letras capitales: la primera letra del capítulo en grande, ocupando varias líneas. El PDF la
+// trae como un trozo suelto; se pega delante de la primera línea que tiene a su derecha. Si no,
+// convertía esa línea en un título.
+function joinDropCaps(rows, bodySize) {
+  for (const r of [...rows]) {
+    for (const p of [...r.parts]) {
+      if (p.size < bodySize * 1.6 || !/^[¿¡«"“'‘—–-]?\p{Lu}$/u.test(p.str.trim())) continue;
+      const right = p.x + (p.w || p.size * 0.5) * 0.8;
+      const top = p.y + p.size * 0.9;
+      const target = rows
+        .filter((o) => o.parts.some((q) => q !== p && q.size < bodySize * 1.25 && q.x >= right && q.y >= p.y - bodySize * 0.5 && q.y <= top))
+        .sort((a, b) => b.y - a.y)[0];
+      if (!target) continue;
+      r.parts.splice(r.parts.indexOf(p), 1);
+      if (!r.parts.length) rows.splice(rows.indexOf(r), 1);
+      target.prefix = p.str.trim();
     }
-    r.text = text.replace(/\s+/g, ' ').trim();
-    r.right = lastEnd || r.x;
   }
-  return rows.filter((r) => r.text);
+  return rows;
+}
+
+function toLines(rows, bodySize) {
+  joinDropCaps(rows, bodySize);
+  return rows.map(finishRow).filter((r) => r.text).sort((a, b) => b.y - a.y);
 }
 
 export async function pdfToEpub(file, onProgress = () => {}) {
@@ -47,13 +82,23 @@ export async function pdfToEpub(file, onProgress = () => {}) {
   let info = {};
   try { info = (await pdf.getMetadata()).info || {}; } catch {}
 
-  const pages = [];
+  const rawPages = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    pages.push(toLines(content.items));
+    rawPages.push(groupRows(content.items));
     onProgress(i / pdf.numPages * 0.85, `Leyendo página ${i} de ${pdf.numPages}`);
   }
+  // Tamaño normal de la letra (contando caracteres, para que las capitales no cuenten)
+  const count = new Map();
+  let chars = 0;
+  for (const rows of rawPages) for (const r of rows) for (const p of r.parts) {
+    const n = p.str.trim().length;
+    count.set(p.size, (count.get(p.size) || 0) + n); chars += n;
+  }
+  let bodySize0 = 10, acc = 0;
+  for (const [sz, n] of [...count].sort((a, b) => a[0] - b[0])) { acc += n; if (acc >= chars / 2) { bodySize0 = sz; break; } }
+  const pages = rawPages.map((rows) => toLines(rows, bodySize0));
 
   const totalChars = pages.flat().reduce((n, l) => n + l.text.length, 0);
   if (totalChars < pdf.numPages * 40) {

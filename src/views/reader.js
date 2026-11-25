@@ -1,7 +1,8 @@
 // Lector EPUB con ajustes de lectura, barra de estado y registro de estadísticas.
 import ePub, { EpubCFI } from 'epubjs';
 import { h, icon, iconBtn, sheet, toast, stars, fmtDuration, todayKey, closeAllSheets } from '../ui.js';
-import { getBook, putBook, getFile, addDay } from '../db.js';
+import { getBook, putBook, getFile, putFile, addDay } from '../db.js';
+import { repairEpub } from '../epubfix.js';
 import { getReaderSettings, saveReaderSettings } from '../store.js';
 
 export const THEMES = {
@@ -119,8 +120,17 @@ function userCss(s) {
 
 export async function renderReader(root, bookId) {
   const book = await getBook(bookId);
-  const file = await getFile(bookId);
+  let file = await getFile(bookId);
   if (!book || !file) { toast('No se encontró el libro'); location.hash = '#/'; return; }
+  // Una vez por libro: quitar caracteres que impiden abrir capítulos (PDF convertidos antes)
+  if (book.xmlOk !== 1) {
+    try {
+      const fixed = await repairEpub(file);
+      if (fixed) { file = fixed; await putFile(bookId, fixed); book.locations = null; }
+      book.xmlOk = 1;
+      await putBook(book);
+    } catch (e) { console.warn('reparar epub', e); }
+  }
   let s = await getReaderSettings();
 
   document.body.classList.add('reading');
