@@ -81,13 +81,14 @@ export async function openBook(id, { onChange } = {}) {
 
     // Estantería
     const shelfSel = h('select', { class: 'select' }, room.items.filter((i) => i.type === 'shelf' && !i.auto).map((sh) => h('option', { value: sh.id, selected: book.shelfId === sh.id }, sh.name)));
-    shelfSel.addEventListener('change', () => { book.shelfId = shelfSel.value; save(); });
+    shelfSel.addEventListener('change', () => { book.shelfId = shelfSel.value; book.nuevo = false; save(); });
 
     body.append(
       h('section', { class: 'field' }, h('label', { class: 'label' }, 'Estado'), statusRow),
       h('div', { class: 'grid2' },
         h('section', { class: 'field' }, h('label', { class: 'label' }, 'Género'), genreSel),
-        h('section', { class: 'field' }, h('label', { class: 'label' }, 'Estantería'), shelfSel)),
+        h('section', { class: 'field' }, h('label', { class: 'label' }, 'Estantería'), shelfSel,
+          book.nuevo ? h('button', { class: 'pill small-pill', onclick: (e) => { book.nuevo = false; save(); e.currentTarget.remove(); toast('Colocado: ya no sale en «Libros nuevos»'); } }, icon('check', 16), 'Dejarlo aquí') : null)),
       h('section', { class: 'field' }, h('label', { class: 'label' }, 'Saga'), h('div', { class: 'row gap' }, sagaIn, sagaNum), dl));
 
     // Sinopsis

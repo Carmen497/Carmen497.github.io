@@ -81,6 +81,7 @@ export async function importFiles(files) {
         readSeconds: 0,
         bookmarks: [],
         xmlOk: REPAIR_VERSION,
+        nuevo: true, // sale en la estantería «Libros nuevos» hasta que lo coloques
       };
       book.shelfId = await pickShelf(book);
       await putFile(id, new Blob([file], { type: 'application/epub+zip' }));

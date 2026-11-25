@@ -44,7 +44,10 @@ export async function openShelf(shelfId, { onChange, origin } = {}) {
       h('div', { class: 'row gap center between' },
         h('span', { class: 'muted' }, `${books.length} libro${books.length === 1 ? '' : 's'}${shelf.auto ? ` · ${ruleLabel(shelf.auto, genres)}` : ''}`),
         h('button', { class: 'pill', onclick: () => { toolsOpen = !toolsOpen; tools.classList.toggle('hidden', !toolsOpen); } }, icon('settings', 16), 'Opciones')),
-      tools));
+      tools,
+      shelf.auto === 'nuevos' && books.length ? h('div', { class: 'row gap center between new-hint' },
+        h('span', { class: 'small' }, 'Toca un libro y elige su estantería: así sale de aquí.'),
+        h('button', { class: 'pill', onclick: allPlaced }, icon('check', 16), 'Ya están colocados')) : null));
 
     const caseEl = h('div', { class: 'case' });
     body.append(caseEl);
@@ -84,6 +87,12 @@ export async function openShelf(shelfId, { onChange, origin } = {}) {
       }))));
   }
 
+  async function allPlaced() {
+    for (const b of booksForShelves(room.items, await getBooks())[shelfId] || []) { b.nuevo = false; await putBook(b); }
+    toast('Listo: la estantería de nuevos queda vacía');
+    draw();
+  }
+
   async function rename() {
     const name = await promptDialog('Nombre de la estantería', shelf.name || '');
     if (!name) return;
@@ -103,7 +112,7 @@ export async function openShelf(shelfId, { onChange, origin } = {}) {
       return h('label', { class: 'pick-row' }, cb, h('div', {}, h('strong', {}, b.title), h('div', { class: 'muted small' }, `${b.author || ''} · en ${other}`)));
     }));
     const ps = sheet(h('div', { class: 'stack' }, list, btn('Mover aquí', async () => {
-      for (const b of all.filter((x) => chosen.has(x.id))) { b.shelfId = shelfId; await putBook(b); }
+      for (const b of all.filter((x) => chosen.has(x.id))) { b.shelfId = shelfId; b.nuevo = false; await putBook(b); }
       ps.close(); draw();
     }, 'primary block')), { title: `Traer a «${shelf.name}»`, tall: true });
   }

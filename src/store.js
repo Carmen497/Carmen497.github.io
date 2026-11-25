@@ -108,6 +108,11 @@ export function clearCache() { cache = {}; }
 
 export const SHELF_CAPACITY = 48;
 
+// Vista de lista
+export const LIST_GROUPS = [['shelf', 'Por estantería (librería)'], ['genre', 'Por género'], ['saga', 'Por saga'], ['author', 'Por autor'], ['status', 'Por estado'], ['none', 'Sin agrupar']];
+export const LIST_SORTS = [['recent', 'Recientes'], ['added', 'Añadidos hace poco'], ['title', 'Título'], ['author', 'Autor'], ['rating', 'Valoración'], ['progress', 'Progreso']];
+
+
 export async function shelves() {
   return (await getRoom()).items.filter((i) => i.type === 'shelf');
 }
@@ -116,6 +121,7 @@ export async function shelves() {
 // Una estantería puede guardar los libros que tú pones (auto = '') o enseñar sola los que cumplen una regla.
 export const AUTO_RULES = [
   ['', 'Los libros que yo ponga'],
+  ['nuevos', 'Libros nuevos (todos los géneros)'],
   ['pendiente', 'Pendientes (sin terminar)'],
   ['leyendo', 'Leyendo ahora'],
   ['leido', 'Leídos'],
@@ -128,6 +134,7 @@ export function ruleLabel(auto, genres = []) {
 }
 function matchesRule(b, auto) {
   switch (auto) {
+    case 'nuevos': return !!b.nuevo;
     case 'pendiente': return b.status !== 'leido' && b.status !== 'abandonado';
     case 'leyendo': return b.status === 'leyendo';
     case 'leido': return b.status === 'leido';

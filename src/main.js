@@ -95,13 +95,15 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__installPrompt = e; });
 
 let updateSW = null, updateReady = false;
+// La versión nueva se aplica cuando sales de la app (en segundo plano), nunca al abrirla:
+// antes se recargaba nada más abrir y parecía que la app se abría dos veces.
 function applyPendingUpdate() {
-  if (updateReady && updateSW && !location.hash.startsWith('#/leer/')) {
+  if (updateReady && updateSW && document.visibilityState === 'hidden' && !location.hash.startsWith('#/leer/')) {
     updateReady = false;
-    toast('Actualizando a la nueva versión…');
-    setTimeout(() => updateSW(true), 600);
+    updateSW(true);
   }
 }
+document.addEventListener('visibilitychange', applyPendingUpdate);
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   import('virtual:pwa-register').then(({ registerSW }) => {
     updateSW = registerSW({
