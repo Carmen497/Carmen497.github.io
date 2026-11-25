@@ -533,3 +533,17 @@ body.dragging::after {
   #toast { bottom: 24px; }
 }
 .pal-tabs { margin-bottom: 6px; }
+
+/* ---------- Subrayados ---------- */
+.hl-bar {
+  position: fixed; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translateX(-50%); z-index: 15;
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 999px;
+  background: var(--card); color: var(--ink); box-shadow: 0 4px 22px rgba(0,0,0,.28);
+}
+.hl-bar.hidden { display: none; }
+.hl-dot { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(0,0,0,.15); flex: none; }
+.hl-dot.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+.hl-quote { margin: 0; padding: 6px 0 6px 12px; border-left: 4px solid; font-style: italic; max-height: 30vh; overflow: auto; white-space: pre-wrap; }
+.hl-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
+.hl-item-text { border-left: 4px solid; padding-left: 8px; font-style: italic; }
+.hl-item-note { font-size: .92rem; }

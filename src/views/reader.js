@@ -1,6 +1,6 @@
 // Lector EPUB con ajustes de lectura, barra de estado y registro de estadísticas.
 import ePub, { EpubCFI } from 'epubjs';
-import { h, icon, iconBtn, sheet, toast, stars, fmtDuration, todayKey, closeAllSheets } from '../ui.js';
+import { h, icon, iconBtn, btn, sheet, toast, stars, fmtDuration, todayKey, closeAllSheets } from '../ui.js';
 import { getBook, putBook, getFile, putFile, addDay } from '../db.js';
 import { repairEpub, REPAIR_VERSION } from '../epubfix.js';
 import { getReaderSettings, saveReaderSettings } from '../store.js';
@@ -160,7 +160,8 @@ export async function renderReader(root, bookId) {
     h('span', { class: 'flip' }, iconBtn('back', () => rendition?.next(), 'Página siguiente')));
   const loading = h('div', { class: 'reader-loading' }, h('div', { class: 'spinner' }), 'Abriendo libro…');
 
-  const shell = h('div', { class: 'reader' }, statusTop, page, statusBottom, dim, warm, topBar, bottomBar, loading);
+  const hlBar = h('div', { class: 'hl-bar hidden' });
+  const shell = h('div', { class: 'reader' }, statusTop, page, statusBottom, dim, warm, topBar, bottomBar, hlBar, loading);
   root.append(shell);
 
   let uiVisible = false;
@@ -284,6 +285,13 @@ export async function renderReader(root, bookId) {
     st.textContent = userCss(s);
     forceInlineFont(doc, fontStack(s.font));
     doc.documentElement.lang ||= book.language || 'es';
+    if (!doc.__rinconSel) {
+      doc.__rinconSel = true;
+      doc.addEventListener('selectionchange', () => {
+        const sel = doc.getSelection();
+        if (!sel || sel.isCollapsed) setTimeout(() => { if (pendingSel?.doc === doc && doc.getSelection()?.isCollapsed) hideHlBar(); }, 200);
+      });
+    }
   }
 
   async function build(target) {
@@ -304,6 +312,8 @@ export async function renderReader(root, bookId) {
     rendition.on('touchend', onTouchEnd);
     rendition.on('keyup', onKey);
     rendition.on('mouseup', () => markActive());
+    rendition.on('selected', onSelected);
+    for (const hl of book.highlights || []) drawHighlight(hl);
     await show(target || book.cfi || undefined);
     loading.remove();
   }
@@ -457,6 +467,8 @@ export async function renderReader(root, bookId) {
   function onTouchEnd(e) {
     const t = e.changedTouches?.[0]; if (!t || !touch) return;
     const dx = t.screenX - touch.x, dy = t.screenY - touch.y;
+    const selNow = e.view?.getSelection?.();
+    if (selNow && !selNow.isCollapsed) { touch = null; return; }
     if (s.flow !== 'scroll' && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3 && Date.now() - touch.time < 800) {
       swiped = true; setTimeout(() => { swiped = false; }, 400);
       dx < 0 ? (navSeq++, rendition.next()) : (navSeq++, rendition.prev());
@@ -470,6 +482,8 @@ export async function renderReader(root, bookId) {
     if (e.target?.closest?.('a')) return;
     const sel = e.view?.getSelection?.();
     if (sel && sel.toString().trim()) return;
+    const hit = highlightAt(e);
+    if (hit) return openHighlight(hit);
     const frame = e.view?.frameElement;
     const fr = frame ? frame.getBoundingClientRect() : { left: 0 };
     const vr = viewer.getBoundingClientRect();
@@ -566,6 +580,92 @@ export async function renderReader(root, bookId) {
   enterFullscreen();
   shell.addEventListener('pointerup', enterFullscreen);
 
+  // ---- Subrayados y notas ----
+  const HL_COLORS = [['amarillo', '#ffd54f'], ['verde', '#81c784'], ['azul', '#64b5f6'], ['rosa', '#f48fb1']];
+  const hlFill = (c) => (HL_COLORS.find(([k]) => k === c) || HL_COLORS[0])[1];
+  let pendingSel = null;
+
+  function drawHighlight(hl) {
+    try {
+      rendition.annotations.remove(hl.cfi, 'highlight');
+      rendition.annotations.highlight(hl.cfi, { id: hl.id }, null, 'rincon-hl', { fill: hlFill(hl.color), 'fill-opacity': '0.4', 'mix-blend-mode': 'normal' });
+    } catch (e) { console.warn('subrayado', e); }
+  }
+
+  function onSelected(cfi, contents) {
+    const text = contents.window.getSelection()?.toString().trim();
+    if (!text) return;
+    pendingSel = { cfi, text, spine: contents.sectionIndex, doc: contents.document, win: contents.window };
+    hlBar.innerHTML = '';
+    hlBar.append(
+      ...HL_COLORS.map(([k, c]) => h('button', { class: 'hl-dot', style: { background: c }, title: 'Subrayar en ' + k, onclick: () => addHighlight(k) })),
+      h('button', { class: 'pill', onclick: () => addHighlight('amarillo', true) }, icon('edit', 16), 'Nota'));
+    hlBar.classList.remove('hidden');
+    setUi(false);
+  }
+  function hideHlBar() { pendingSel = null; hlBar.classList.add('hidden'); }
+
+  function addHighlight(color, withNote = false) {
+    if (!pendingSel) return;
+    const { cfi, text, spine, win } = pendingSel;
+    let pct = book.progress || 0;
+    try { if (epub.locations.length()) pct = epub.locations.percentageFromCfi(cfi); } catch {}
+    const hl = { id: 'hl-' + Date.now().toString(36), cfi, text: text.slice(0, 2000), color, note: '', spine, chapter: chapterEl.textContent || '', pct, at: Date.now() };
+    book.highlights ||= [];
+    book.highlights.push(hl);
+    drawHighlight(hl);
+    win.getSelection()?.removeAllRanges();
+    hideHlBar();
+    saveSoon();
+    if (withNote) openHighlight(hl, true);
+    else toast('Subrayado');
+  }
+
+  // ¿El toque cae sobre un subrayado de esta página?
+  function highlightAt(e) {
+    const list = book.highlights || [];
+    if (!list.length || !rendition) return null;
+    const c = rendition.getContents().find((x) => x.window === e.view);
+    if (!c) return null;
+    for (const hl of list) {
+      if (hl.spine !== undefined && hl.spine !== c.sectionIndex) continue;
+      try {
+        const r = c.range(hl.cfi);
+        for (const b of r.getClientRects()) {
+          if (e.clientX >= b.left - 2 && e.clientX <= b.right + 2 && e.clientY >= b.top - 2 && e.clientY <= b.bottom + 2) return hl;
+        }
+      } catch {}
+    }
+    return null;
+  }
+
+  function openHighlight(hl, focusNote = false) {
+    const note = h('textarea', { class: 'textarea', rows: 4, placeholder: 'Escribe tu nota…' });
+    note.value = hl.note || '';
+    note.addEventListener('input', () => { hl.note = note.value; saveSoon(); });
+    const quote = h('blockquote', { class: 'hl-quote', style: { borderColor: hlFill(hl.color) } }, hl.text);
+    const dots = h('div', { class: 'row gap' }, HL_COLORS.map(([k, c]) => h('button', {
+      class: 'hl-dot ' + (hl.color === k ? 'on' : ''), style: { background: c }, title: k,
+      onclick: (ev) => {
+        hl.color = k; drawHighlight(hl); saveSoon(); quote.style.borderColor = c;
+        dots.querySelectorAll('.hl-dot').forEach((d) => d.classList.remove('on')); ev.currentTarget.classList.add('on');
+      },
+    })));
+    const body = h('div', { class: 'stack' },
+      quote,
+      h('label', { class: 'label' }, 'Color'), dots,
+      h('label', { class: 'label' }, 'Nota'), note,
+      h('div', { class: 'row gap wrap' },
+        btn('Listo', () => hs.close(), 'primary'),
+        btn([icon('trash', 16), ' Quitar subrayado'], () => {
+          book.highlights = (book.highlights || []).filter((x) => x.id !== hl.id);
+          try { rendition.annotations.remove(hl.cfi, 'highlight'); } catch {}
+          saveSoon(); hs.close(); toast('Subrayado quitado');
+        }, 'ghost')));
+    const hs = sheet(body, { title: hl.chapter || 'Subrayado' });
+    if (focusNote) setTimeout(() => note.focus(), 250);
+  }
+
   // ---- Marcadores e índice ----
   function toggleBookmark() {
     if (!currentLoc) return;
@@ -586,7 +686,25 @@ export async function renderReader(root, bookId) {
     const listBm = h('div', { class: 'toc-list hidden' });
     const tabs = h('div', { class: 'seg' },
       h('button', { class: 'on', onclick: (e) => { tabs.children[0].classList.add('on'); tabs.children[1].classList.remove('on'); listToc.classList.remove('hidden'); listBm.classList.add('hidden'); } }, 'Índice'),
-      h('button', { onclick: () => { tabs.children[1].classList.add('on'); tabs.children[0].classList.remove('on'); listBm.classList.remove('hidden'); listToc.classList.add('hidden'); } }, `Marcadores (${(book.bookmarks || []).length})`));
+      h('button', { onclick: () => pickTab(1) }, `Marcadores (${(book.bookmarks || []).length})`),
+      h('button', { onclick: () => pickTab(2) }, `Notas (${(book.highlights || []).length})`));
+    const listHl = h('div', { class: 'toc-list hidden' });
+    const lists = [listToc, listBm, listHl];
+    function pickTab(n) { [...tabs.children].forEach((b, i) => b.classList.toggle('on', i === n)); lists.forEach((l, i) => l.classList.toggle('hidden', i !== n)); }
+    tabs.children[0].onclick = () => pickTab(0);
+    const hls = (book.highlights || []).slice().sort((a, b) => (a.pct || 0) - (b.pct || 0));
+    for (const hl of hls) {
+      listHl.append(h('button', { class: 'toc-item hl-item', onclick: () => { show(hl.cfi); ts.close(); setUi(false); } },
+        h('span', { class: 'hl-item-text', style: { borderColor: hlFill(hl.color) } }, hl.text.length > 220 ? hl.text.slice(0, 220) + '…' : hl.text),
+        hl.note ? h('span', { class: 'hl-item-note' }, '✎ ', hl.note) : null,
+        h('span', { class: 'muted small' }, (hl.chapter ? hl.chapter + ' · ' : '') + Math.round((hl.pct || 0) * 100) + '%')));
+    }
+    if (hls.length) {
+      listHl.append(btn('Copiar todos los subrayados y notas', async () => {
+        const txt = book.title + (book.author ? ' — ' + book.author : '') + '\n\n' + hls.map((x) => '«' + x.text + '»' + (x.note ? '\nNota: ' + x.note : '') + '\n(' + (x.chapter ? x.chapter + ', ' : '') + Math.round((x.pct || 0) * 100) + '%)').join('\n\n');
+        try { await navigator.clipboard.writeText(txt); toast('Copiados: puedes pegarlos donde quieras'); } catch { toast('No se pudieron copiar'); }
+      }, 'ghost'));
+    } else listHl.append(h('p', { class: 'muted' }, 'Mantén pulsada una palabra y arrastra para elegir el texto. Luego toca un color para subrayarlo o «Nota» para escribir algo.'));
     const current = currentLoc ? chapterFor(currentLoc.start.href) : '';
     for (const t of flatToc(toc)) {
       listToc.append(h('button', { class: `toc-item ${t.label.trim() === current ? 'on' : ''}`, style: { paddingLeft: `${14 + t.depth * 16}px` }, onclick: () => { show(t.href); ts.close(); setUi(false); } }, t.label.trim()));
@@ -598,7 +716,7 @@ export async function renderReader(root, bookId) {
         h('span', {}, b.label), h('span', { class: 'muted small' }, ` · ${Math.round((b.pct || 0) * 100)}%`)));
     }
     if (!bms.length) listBm.append(h('p', { class: 'muted' }, 'Aún no has marcado ninguna página. Usa el icono de marcador arriba.'));
-    const ts = sheet(h('div', { class: 'stack' }, tabs, listToc, listBm), { title: book.title, tall: true });
+    const ts = sheet(h('div', { class: 'stack' }, tabs, listToc, listBm, listHl), { title: book.title, tall: true });
     setTimeout(() => listToc.querySelector('.on')?.scrollIntoView({ block: 'center' }), 300);
   }
 
