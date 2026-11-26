@@ -271,7 +271,14 @@ body.reading #toast { bottom: 80px; }
 @keyframes firefly { 0%,100% { transform: translate(0,0); opacity: .3; } 30% { opacity: 1; } 50% { transform: translate(8px,-10px); opacity: .9; } 75% { transform: translate(-6px,-4px); opacity: .4; } }
 .rune { animation: rune 4s ease-in-out infinite; }
 @keyframes rune { 0%,100% { opacity: .65; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .cat-tail, .steam, .flame, .twinkle, .glow, .water, .bubble, .float, .petal, .ray, .firefly, .rune { animation: none; } }
+.curtain { transform-box: fill-box; transform-origin: 50% 0; animation: curtain 5s ease-in-out infinite; }
+.curtain.c2 { animation-delay: -2.5s; }
+@keyframes curtain { 0%,100% { transform: skewX(0deg); } 50% { transform: skewX(5deg); } }
+.windline { stroke-dasharray: 50 260; animation: windline 7s linear infinite; }
+@keyframes windline { to { stroke-dashoffset: -310; } }
+.snow { animation: snow 8s linear infinite; }
+@keyframes snow { 0% { transform: translate(0,-30px); opacity: 0; } 15% { opacity: .9; } 100% { transform: translate(18px,150px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .cat-tail, .steam, .flame, .twinkle, .glow, .water, .bubble, .float, .petal, .ray, .firefly, .rune, .curtain, .windline, .snow { animation: none; } }
 
 .room-overlay {
   position: absolute; left: 0; right: 0; bottom: calc(var(--nav-h) + var(--safe-b)); pointer-events: none;

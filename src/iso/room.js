@@ -30,6 +30,7 @@ export const CATALOG = [
   { type: 'lights', label: 'Guirnalda de luces', wall: true, span: 3 },
   { type: 'wallshelf', label: 'Balda', wall: true, span: 2, color: '#8a5a3b', colorable: true },
   // ---- De los temas (cada grupo tiene su pestaña en Decorar) ----
+  { type: 'balcony', label: 'Balcón con vistas', wall: true, span: 2, group: 'castillo' },
   { type: 'banner', label: 'Estandarte', wall: true, span: 1, color: '#8c2b3a', colorable: true, group: 'castillo' },
   { type: 'tapestry', label: 'Tapiz', wall: true, span: 2, color: '#6a2c3a', colorable: true, group: 'castillo' },
   { type: 'torch', label: 'Antorcha', wall: true, span: 1, group: 'castillo' },
@@ -56,6 +57,8 @@ export const CATALOG = [
   { type: 'stars', label: 'Estrellas colgantes', wall: true, span: 3, overlay: true, group: 'magia' },
   { type: 'bonsai', label: 'Bonsái', w: 1, d: 1, group: 'zen' },
   { type: 'stonelantern', label: 'Farol de piedra', w: 1, d: 1, group: 'zen' },
+  { type: 'woodpile', label: 'Leñera', w: 1, d: 1, group: 'cabana' },
+  { type: 'antlers', label: 'Cornamenta', wall: true, span: 1, group: 'cabana' },
   { type: 'paperlanterns', label: 'Farolillos', wall: true, span: 3, overlay: true, group: 'zen' },
   // ---- De temporada (solo se ofrecen en sus fechas; lo ya colocado se queda) ----
   { type: 'xmastree', label: 'Árbol de Navidad', w: 1, d: 1, season: 'navidad' },
@@ -86,7 +89,7 @@ export const SEASONS = {
   otono: { label: 'Otoño', emoji: '🍂', from: [9, 16], to: [11, 30] },
   halloween: { label: 'Halloween', emoji: '🎃', from: [10, 10], to: [11, 3] },
 };
-export const GROUPS = { castillo: '🏰 Castillo', cuento: '👑 Cuento', naturaleza: '🌿 Naturaleza', magia: '🔮 Magia', zen: '🏮 Zen' };
+export const GROUPS = { castillo: '🏰 Castillo', cuento: '👑 Cuento', naturaleza: '🌿 Naturaleza', magia: '🔮 Magia', zen: '🏮 Zen', cabana: '🏔️ Cabaña' };
 export function activeSeasons(date = new Date()) {
   const v = (date.getMonth() + 1) * 100 + date.getDate();
   return Object.keys(SEASONS).filter((k) => {
@@ -412,7 +415,7 @@ function drawWallItem(it) {
 }
 
 const WALL_ITEM_Z = { window: 140, painting: 120, clock: 135, lights: 160, wallshelf: 105, wreath: 130, leafwreath: 130, stockings: 75, xmaslights: 162, hearts: 160, flowergarland: 160, bunting: 162, bats: 155,
-  banner: 150, tapestry: 152, torch: 125, shield: 135, archwindow: 160, mirror: 132, candelabra: 120, vines: 168, fireflies: 150, stars: 166, paperlanterns: 166 };
+  balcony: 150, antlers: 135, banner: 150, tapestry: 152, torch: 125, shield: 135, archwindow: 160, mirror: 132, candelabra: 120, vines: 168, fireflies: 150, stars: 166, paperlanterns: 166 };
 
 function wallTransform(it) {
   const c = catalogOf(it.type);
@@ -433,17 +436,18 @@ const FLOORS = {
   marble: ['#efebe4', '#3e3a40'],
   terracotta: ['#c8785a', '#a65f46'],
   tatami: ['#cfc98f', '#55623a'],
+  nightstone: ['#353a5e', '#1d2038'],
 };
 export const FLOOR_OPTIONS = [
   { id: 'wood', label: 'Madera clara' }, { id: 'darkwood', label: 'Madera oscura' },
   { id: 'tiles', label: 'Baldosas' }, { id: 'green', label: 'Moqueta verde' }, { id: 'rose', label: 'Moqueta rosa' },
   { id: 'flagstone', label: 'Losas de piedra' }, { id: 'moss', label: 'Musgo' }, { id: 'checker', label: 'Ajedrez rosa' },
-  { id: 'marble', label: 'Mármol blanco y negro' }, { id: 'terracotta', label: 'Barro cocido' }, { id: 'tatami', label: 'Tatami' },
+  { id: 'marble', label: 'Mármol blanco y negro' }, { id: 'terracotta', label: 'Barro cocido' }, { id: 'tatami', label: 'Tatami' }, { id: 'nightstone', label: 'Piedra azul noche' },
 ];
 export const WALL_STYLES = [
   { id: 'plain', label: 'Lisa' }, { id: 'stone', label: 'Piedra de castillo' }, { id: 'timber', label: 'Taberna (vigas)' }, { id: 'logs', label: 'Troncos' },
   { id: 'wainscot', label: 'Victoriana' }, { id: 'stripes', label: 'Palacio rosa y dorado' }, { id: 'leaves', label: 'Bosque (al aire libre)' },
-  { id: 'glass', label: 'Invernadero de cristal' }, { id: 'stars', label: 'Torre de piedra' }, { id: 'shoji', label: 'Japonesa (shoji)' },
+  { id: 'glass', label: 'Invernadero de cristal' }, { id: 'wind', label: 'Arcos abiertos al cielo' }, { id: 'stars', label: 'Torre de piedra' }, { id: 'shoji', label: 'Japonesa (shoji)' },
 ];
 export const WALL_OPTIONS = ['#e9d8c0', '#d6c2a8', '#c9d6c3', '#c8d4e0', '#e8c9c0', '#d9d0e6', '#5b4a63', '#3e4a5a'];
 
@@ -532,6 +536,7 @@ function drawFloorItem(it, books, night) {
     case 'cauldron': return drawCauldron(it);
     case 'bonsai': return drawBonsai(it);
     case 'stonelantern': return drawStoneLantern(it);
+    case 'woodpile': return drawWoodpile(it);
   }
   return '';
 }
@@ -691,6 +696,7 @@ export function renderRoom(room, booksByShelf, { edit = false, selectedId = null
       if (it.type === 'candles') glowAt(proj(it.x + 0.5, it.y + 0.5, 22), 34, 0.8);
       if (it.type === 'crystalball') glowAt(proj(it.x + 0.5, it.y + 0.5, 36), 30, 0.7);
       if (it.type === 'stonelantern') glowAt(proj(it.x + 0.5, it.y + 0.5, 40), 30, 0.8);
+      if (it.type === 'balcony') { const [x, y] = wallAt(40); s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="60" ry="42" fill="#9fb4ff" opacity=".1" pointer-events="none"/>`; }
       if (it.type === 'archwindow') { const [x, y] = wallAt(90); s += `<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="50" ry="40" fill="#9fb4ff" opacity=".08" pointer-events="none"/>`; }
       if (it.type === 'window') { const c = catalogOf('window'); const [x, y] = it.wall === 'a' ? proj(0.3, it.p + c.span / 2, 100) : proj(it.p + c.span / 2, 0.3, 100); s += `<ellipse cx="${x}" cy="${y}" rx="50" ry="40" fill="#9fb4ff" opacity=".08" pointer-events="none"/>`; }
     }
@@ -982,6 +988,34 @@ function themeWallItem(it, W) {
   let s = '';
   const gold = '#d4af37';
   switch (it.type) {
+    case 'balcony': {
+      const [a, b] = skyColors(new Date().getHours()), night = a === '#1c2448', st = '#a39a8d', cid = 'bc-' + it.id;
+      const op = 'M9,150 V36 A23,23 0 0 1 55,36 V150 Z';
+      s += `<defs><linearGradient id="${cid}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient><clipPath id="${cid}c"><path d="${op}"/></clipPath></defs>`;
+      s += `<path d="M2,150 V36 A30,30 0 0 1 62,36 V150 Z" fill="${shade(st, 0.88)}"/>`;
+      for (let v = 40; v < 150; v += 14) s += `<path d="M2,${v} h7 M55,${v} h7" stroke="${shade(st, 0.65)}" stroke-width="1"/>`;
+      s += `<g clip-path="url(#${cid}c)"><rect width="64" height="150" fill="url(#${cid}s)"/>`;
+      s += night ? `<circle cx="44" cy="30" r="5" fill="#f4ecc8"/><circle cx="46" cy="29" r="4.5" fill="${a}"/><circle cx="18" cy="26" r=".8" fill="#fff"/><circle cx="30" cy="40" r=".7" fill="#fff"/><circle cx="50" cy="48" r=".7" fill="#fff"/>`
+        : `<circle cx="44" cy="32" r="6" fill="#fff6c8" opacity=".9"/><ellipse cx="22" cy="40" rx="9" ry="3" fill="#fff" opacity=".85"/>`;
+      s += `<path d="M9,72 L20,52 L28,62 L40,42 L55,66 V150 H9 Z" fill="${night ? '#2a3350' : '#8fa3b8'}"/><path d="M36.5,48 L40,42 L44,49 L41,47 Z M17.5,57 L20,52 L23,57 Z" fill="#fff" opacity=".9"/>`;
+      s += `<path d="M9,84 Q22,72 34,80 T55,76 V150 H9 Z" fill="${night ? '#1d2a3a' : '#6f9f5f'}"/>`;
+      s += `<path d="M9,94 Q30,86 55,96 V150 H9 Z" fill="${night ? '#1a2633' : '#93c27a'}"/>`;
+      s += `<path d="M28,150 Q22,122 32,106 T29,90" stroke="${night ? '#4a5a8a' : '#7fc3e8'}" stroke-width="3.5" fill="none"/>`;
+      for (const [x, y] of [[14, 84], [18, 86], [46, 82], [50, 85], [40, 98], [16, 104]]) s += `<circle cx="${x}" cy="${y}" r="2.6" fill="${night ? '#16222c' : '#4f7f45'}"/>`;
+      s += `<path d="M40,104 h6 v-4 l-3,-3 -3,3 Z M47,106 h5 v-3 l-2.5,-2.5 -2.5,2.5 Z" fill="${night ? '#ffd27a' : '#e8dcc4'}"/></g>`;
+      // Suelo del balcón y balaustrada
+      s += `<path d="M9,150 V131 H55 V150 Z" fill="${shade(st, 1.08)}"/><rect x="9" y="108" width="46" height="4" fill="${shade(st, 1.15)}"/><rect x="9" y="127" width="46" height="4" fill="${shade(st, 0.95)}"/>`;
+      for (let x = 12; x < 53; x += 5.5) s += `<path d="M${x},112 q-1.6,3 0,7.5 q1.6,4.5 0,7.5 h2.8 q-1.6,-3 0,-7.5 q1.6,-4.5 0,-7.5 Z" fill="${st}"/>`;
+      s += `<rect x="9" y="108" width="4" height="23" fill="${shade(st, 1.05)}"/><rect x="51" y="108" width="4" height="23" fill="${shade(st, 1.05)}"/>`;
+      // Cortinas de terciopelo recogidas y arco
+      s += `<path d="M9,30 q11,36 1,80 l-1,40 V30 Z" fill="#7a2230"/><path d="M55,30 q-11,36 -1,80 l1,40 V30 Z" fill="#7a2230"/><path d="M9,30 q7,30 3,64" stroke="#9a3444" stroke-width="1.4" fill="none"/>`;
+      s += `<path d="M9,150 V36 A23,23 0 0 1 55,36 V150" stroke="${shade(st, 1.15)}" stroke-width="2" fill="none"/><path d="M28,6 h8 l-1,9 h-6 Z" fill="${shade(st, 1.12)}"/>`;
+      break;
+    }
+    case 'antlers':
+      s += `<path d="M10,20 h12 l-1.5,13 q-4.5,3 -9,0 Z" fill="#6b4630"/><path d="M11,20 h10" stroke="#8a6244" stroke-width="1.2"/>`;
+      s += `<path d="M14,21 C9,15 5,10 5,1 M8,12 L2,10 M6,7 L1,3 M18,21 C23,15 27,10 27,1 M24,12 L30,10 M26,7 L31,3" stroke="#eadcc0" stroke-width="2.4" stroke-linecap="round" fill="none"/>`;
+      break;
     case 'banner': {
       const col = it.color || '#8c2b3a';
       s += `<path d="M6,3 h20 v60 l-10,-8 l-10,8 Z" fill="${col}"/><path d="M6,3 h20 v5 h-20 Z" fill="${shade(col, 0.7)}"/>`;
@@ -1070,6 +1104,20 @@ function themeWallItem(it, W) {
         s += `<rect x="${x - 5}" y="${y + 24.5}" width="10" height="2.5" fill="#2a2a2a"/><line x1="${x}" y1="${y + 27}" x2="${x}" y2="${y + 33}" stroke="#c9a227" stroke-width="1.2"/>`;
       }
       break;
+    }
+  }
+  return s;
+}
+
+function drawWoodpile(it) {
+  const { x, y } = it;
+  let s = box(x + 0.12, y + 0.1, 0, 0.76, 0.8, 3, '#5a3d2b');
+  for (const [z, xs] of [[8, [0.24, 0.41, 0.58, 0.75]], [17, [0.32, 0.49, 0.66]], [26, [0.41, 0.58]]]) {
+    for (const lx of xs) {
+      const [bx, by] = proj(x + lx, y + 0.16, z), [fx, fy] = proj(x + lx, y + 0.86, z);
+      s += `<line x1="${f1(bx)}" y1="${f1(by)}" x2="${f1(fx)}" y2="${f1(fy)}" stroke="#6b4a33" stroke-width="10.5" stroke-linecap="round"/>`;
+      s += `<line x1="${f1(bx)}" y1="${f1(by - 3)}" x2="${f1(fx)}" y2="${f1(fy - 3)}" stroke="#8a6244" stroke-width="2.4" stroke-linecap="round"/>`;
+      s += `<g transform="${faceY(y + 0.86, x + lx - 5.2 / 32, z + 5.2)}"><circle cx="5.2" cy="5.2" r="5.2" fill="#d9b07a" stroke="#7a5236" stroke-width="1"/><circle cx="5.2" cy="5.2" r="2.6" fill="none" stroke="#b98a52" stroke-width=".7"/></g>`;
     }
   }
   return s;

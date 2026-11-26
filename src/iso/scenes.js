@@ -5,7 +5,7 @@
 //   back3d  → piezas en 3D pegadas a las paredes (columnas, almenas, troncos, cúpula trasera…)
 //   fore    → lo que va por delante de los muebles (rayos de luz, pétalos, la parte delantera de la cúpula…)
 //   lights  → lo que brilla y no se apaga con el modo noche (velas flotantes, luciérnagas…)
-import { WALL_H as H, proj, f1, poly, shade, box, faceX, faceY, floorM, hashFrac as rnd, skyColors } from './geom.js';
+import { WALL_H as H, proj, f1, poly, shade, box, cyl, faceX, faceY, floorM, hashFrac as rnd, skyColors } from './geom.js';
 
 const BIG = 4000;
 const P = (x, y, z) => proj(x, y, z).map(f1);
@@ -78,7 +78,7 @@ function skyline(N, uid) {
 export function wallScene(room, N, uid, night) {
   const fn = {
     stone: castle, timber: tavern, logs: cabin, wainscot: victorian, stripes: fairytale,
-    leaves: forest, glass: glasshouse, stars: tower, shoji: zen,
+    leaves: forest, glass: glasshouse, stars: tower, shoji: zen, wind,
   }[room.wallStyle];
   return fn ? fn(room, N, uid, night) : plain(room, N);
 }
@@ -145,37 +145,140 @@ function tavern(room, N) {
   return { walls, back3d, fore };
 }
 
-// ---- Cabaña: troncos redondos con sus cortes a la vista ----
+// ---- Cabaña de montaña: troncos de distintos tonos, postes en las esquinas, nieve y montañas nevadas detrás ----
 function cabin(room, N, uid) {
-  const w = room.wall, W = N * 32, lh = 17;
-  const defs = `<linearGradient id="${uid}log" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(w, 1.25)}"/><stop offset=".3" stop-color="${w}"/><stop offset=".78" stop-color="${shade(w, 0.72)}"/><stop offset="1" stop-color="${shade(w, 0.48)}"/></linearGradient>`;
+  const w = room.wall, W = N * 32, lh = 20;
+  const sky = snowyline(N, uid);
+  const defs = sky.defs + `<linearGradient id="${uid}log" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".22" stop-color="#fff" stop-opacity=".04"/><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".42"/></linearGradient>`;
   const walls = onWalls(N, (id) => {
-    let s = `<rect width="${W}" height="${H}" fill="#d9c9a6"/>`;
+    let s = `<rect width="${W}" height="${H}" fill="#ece2c8"/>`;
     for (let v = 0, r = 0; v < H; v += lh, r++) {
-      s += `<rect x="-10" y="${v + 1.4}" width="${W + 20}" height="${lh - 2.8}" rx="8" fill="url(#${uid}log)"/>`;
-      for (let i = 0; i < W / 26; i++) {
-        const u = rnd(id + r + 'b' + i) * W, l = 8 + rnd(id + r + 'c' + i) * 22;
-        s += `<path d="M${f1(u)},${f1(v + 4 + rnd(id + r + 'd' + i) * (lh - 8))} h${f1(l)}" stroke="${shade(w, 0.62)}" stroke-width=".8" opacity=".55"/>`;
-      }
-      if (rnd(id + 'k' + r) < 0.7) { const u = rnd(id + 'ku' + r) * W; s += `<ellipse cx="${f1(u)}" cy="${v + lh / 2}" rx="4" ry="2.6" fill="${shade(w, 0.6)}"/><ellipse cx="${f1(u)}" cy="${v + lh / 2}" rx="1.8" ry="1.1" fill="${shade(w, 0.45)}"/>`; }
+      // Cada hilada puede tener una junta (dos troncos unidos)
+      const joint = rnd(id + 'j' + r) < 0.55 ? 40 + rnd(id + 'ju' + r) * (W - 80) : -1;
+      const segs = joint > 0 ? [[-12, joint], [joint + 2, W + 12]] : [[-12, W + 12]];
+      segs.forEach(([u0, u1], k) => {
+        const c = shade(w, 0.84 + rnd(id + 'lc' + r + k) * 0.26);
+        s += `<rect x="${f1(u0)}" y="${v + 2.2}" width="${f1(u1 - u0)}" height="${lh - 4.4}" rx="9" fill="${c}"/>`;
+        for (let i = 0; i < (u1 - u0) / 26; i++) {
+          const u = u0 + rnd(id + r + k + 'g' + i) * (u1 - u0 - 30), y = v + 6 + rnd(id + r + k + 'h' + i) * (lh - 12);
+          s += `<path d="M${f1(u)},${f1(y)} q8,-1.6 16,0 t16,0" stroke="${shade(c, 0.78)}" stroke-width=".7" fill="none" opacity=".7"/>`;
+        }
+        if (rnd(id + r + k + 'c') < 0.35) { const u = u0 + rnd(id + r + k + 'cu') * (u1 - u0 - 60); s += `<path d="M${f1(u)},${v + lh / 2} l18,1 14,-1 12,1" stroke="${shade(c, 0.55)}" stroke-width="1" fill="none"/>`; }
+        if (rnd(id + r + k + 'k') < 0.5) { const u = u0 + 20 + rnd(id + r + k + 'ku') * (u1 - u0 - 40); s += `<ellipse cx="${f1(u)}" cy="${v + lh / 2}" rx="4.5" ry="3" fill="${shade(c, 0.66)}"/><ellipse cx="${f1(u)}" cy="${v + lh / 2}" rx="2" ry="1.3" fill="${shade(c, 0.45)}"/>`; }
+        s += `<rect x="${f1(u0)}" y="${v + 2.2}" width="${f1(u1 - u0)}" height="${lh - 4.4}" rx="9" fill="url(#${uid}log)"/>`;
+      });
     }
     return s;
   });
-  // Cortes de los troncos en los extremos de las paredes
+  // Postes redondos en la esquina y en los extremos, y nieve sobre las paredes
+  const post = (x, y) => cyl(x, y, 0, 0.17, H + 6, shade(w, 0.92)) + `<ellipse cx="${P(x, y, H + 6)[0]}" cy="${P(x, y, H + 6)[1]}" rx="9" ry="4.5" fill="#f4f7fa"/>`;
   let back3d = '';
-  const disc = (rows, plane) => {
-    for (let r = 0; r * lh < H; r++) {
-      const zTop = H - r * lh;
-      const stub = `<rect x="0" y="1.4" width="9" height="${lh - 2.8}" fill="url(#${uid}log)"/>`;
-      const end = `<ellipse cx="9" cy="${lh / 2}" rx="7.6" ry="${lh / 2 - 0.6}" fill="#d6ab72" stroke="${shade(w, 0.5)}" stroke-width="1.2"/><ellipse cx="9" cy="${lh / 2}" rx="4.6" ry="5" fill="none" stroke="#b9874f" stroke-width=".8"/><ellipse cx="9" cy="${lh / 2}" rx="1.6" ry="1.8" fill="#a0703f"/>`;
-      rows.push(plane(zTop, stub, end));
+  for (let i = 0; i < N; i += 0.5) {
+    for (const [x, y] of [[i + 0.25, -0.12], [-0.12, i + 0.25]]) {
+      const [sx, sy] = P(x, y, H);
+      back3d += `<ellipse cx="${sx}" cy="${f1(sy - 2)}" rx="${f1(10 + rnd('sn' + i + x) * 6)}" ry="4" fill="#f4f7fa"/>`;
     }
+  }
+  back3d += post(0.05, 0.05) + post(N - 0.17, 0.05) + post(0.05, N - 0.17);
+  return { bg: sky.bg, walls, back3d, defs, cap: '#f2f5f8', noBaseboard: true };
+}
+
+// Montañas nevadas con pinos y nieve cayendo (fondo de la cabaña)
+function snowyline(N, uid) {
+  const W = N * 32, [sa, sb] = skyColors(new Date().getHours()), dark = sa === '#1c2448';
+  const defs = `<linearGradient id="${uid}snsky" gradientUnits="userSpaceOnUse" x1="0" y1="${-H - 300}" x2="0" y2="0"><stop offset="0" stop-color="${dark ? '#151d3a' : '#a9cbe6'}"/><stop offset="1" stop-color="${dark ? '#2c3760' : '#e8f1f6'}"/></linearGradient>`;
+  let bg = `<rect x="${-BIG}" y="${-BIG}" width="${BIG * 2}" height="${BIG * 2}" fill="url(#${uid}snsky)"/>`;
+  if (dark) for (let i = 0; i < 50; i++) bg += `<circle cx="${f1((rnd('k' + i) - 0.5) * W * 3)}" cy="${f1(-H - 320 + rnd('l' + i) * 260)}" r="${f1(0.6 + rnd('m' + i))}" fill="#fff" opacity=".8"/>`;
+  for (const [y0, col, amp, step] of [[-H - 30, dark ? '#3a4670' : '#b9c8d8', 110, 90], [-H + 30, dark ? '#2b3558' : '#9fb2c6', 80, 70]]) {
+    let d = `M${-W * 2},${y0}`, caps = '';
+    for (let x = -W * 2, i = 0; x < W * 2; i++) {
+      const s = step + rnd(y0 + 's' + i) * step, hgt = amp * (0.5 + rnd(y0 + 'h' + i) * 0.5), px = x + s / 2, py = y0 - hgt;
+      d += ` L${f1(px)},${f1(py)} L${f1(x + s)},${y0}`;
+      const k = 0.32;
+      caps += `<path d="M${f1(px - (s / 2) * k)},${f1(py + hgt * k)} L${f1(px)},${f1(py)} L${f1(px + (s / 2) * k)},${f1(py + hgt * k)} l-6,-5 -5,6 -6,-6 -5,5 Z" fill="${dark ? '#c9d3ea' : '#ffffff'}"/>`;
+      x += s;
+    }
+    bg += `<path d="${d} V${BIG} H${-W * 2} Z" fill="${col}"/>${caps}`;
+  }
+  // Pinos con nieve
+  const pine = dark ? '#16283a' : '#2f5a4a';
+  bg += `<rect x="${-BIG}" y="${-H + 70}" width="${BIG * 2}" height="${BIG}" fill="${dark ? '#1a2a3a' : '#e6eef3'}"/>`;
+  for (let x = -W * 1.8, i = 0; x < W * 1.8; x += 16 + rnd('px' + i) * 14, i++) {
+    const h = 34 + rnd('ph' + i) * 30, y = -H + 74 + rnd('py' + i) * 10;
+    bg += `<path d="M${f1(x)},${f1(y - h)} L${f1(x + h * 0.32)},${f1(y)} H${f1(x - h * 0.32)} Z" fill="${pine}"/><path d="M${f1(x)},${f1(y - h)} l${f1(h * 0.1)},${f1(h * 0.3)} h${f1(-h * 0.2)} Z" fill="#f4f7fa"/>`;
+  }
+  for (let i = 0; i < 60; i++) bg += `<circle class="snow" style="animation-delay:-${f1(rnd('fd' + i) * 8)}s" cx="${f1((rnd('fx' + i) - 0.5) * W * 2.6)}" cy="${f1(-H - 260 + rnd('fy' + i) * 260)}" r="${f1(1 + rnd('fr' + i) * 1.4)}" fill="#fff" opacity=".9"/>`;
+  return { bg, defs };
+}
+
+// ---- Casa del Viento: palacio tallado en la montaña, arcos abiertos al cielo estrellado y a la ciudad del valle ----
+function wind(room, N, uid) {
+  const w = room.wall, W = N * 32;
+  const defs = `<linearGradient id="${uid}wsky" gradientUnits="userSpaceOnUse" x1="0" y1="${-H - 340}" x2="0" y2="${W}"><stop offset="0" stop-color="#070a22"/><stop offset=".45" stop-color="#1a2150"/><stop offset=".75" stop-color="#3b3470"/><stop offset="1" stop-color="#0d1230"/></linearGradient>`
+    + `<linearGradient id="${uid}wview" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0e2c"/><stop offset=".6" stop-color="#2a2a66"/><stop offset="1" stop-color="#4a3c7a"/></linearGradient>`
+    + `<linearGradient id="${uid}curt" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset=".5" stop-color="#eef0ff" stop-opacity=".45"/><stop offset="1" stop-color="#fff" stop-opacity=".12"/></linearGradient>`;
+  // Fondo: cielo de estrellas, luna, montañas y la ciudad iluminada junto al río
+  let bg = `<rect x="${-BIG}" y="${-BIG}" width="${BIG * 2}" height="${BIG * 2}" fill="url(#${uid}wsky)"/>`;
+  bg += `<ellipse cx="${-W * 0.2}" cy="${-H - 200}" rx="${W * 1.6}" ry="40" fill="#c9c4ff" opacity=".07" transform="rotate(-12 ${-W * 0.2} ${-H - 200})"/>`;
+  for (let i = 0; i < 160; i++) bg += `<circle ${i % 7 ? '' : `class="twinkle t${i % 3}" `}cx="${f1((rnd('a' + i) - 0.5) * W * 3.4)}" cy="${f1(-H - 360 + rnd('b' + i) * 330)}" r="${f1(0.5 + rnd('c' + i) * 1.3)}" fill="#fff" opacity="${f1(0.5 + rnd('d' + i) * 0.5)}"/>`;
+  bg += `<circle cx="${W * 0.7}" cy="${-H - 210}" r="22" fill="#f3efe0"/><circle cx="${W * 0.7 + 9}" cy="${-H - 216}" r="20" fill="#0f1438"/><circle cx="${W * 0.7}" cy="${-H - 210}" r="60" fill="#f3efe0" opacity=".05"/>`;
+  for (const [y0, col, amp] of [[-H - 20, '#1b2150', 120], [-H + 40, '#141a40', 80]]) {
+    let d = `M${-W * 2},${y0}`;
+    for (let x = -W * 2, i = 0; x < W * 2; i++) { const s = 60 + rnd(y0 + 's' + i) * 90; d += ` L${f1(x + s / 2)},${f1(y0 - amp * (0.4 + rnd(y0 + 'h' + i) * 0.6))} L${f1(x + s)},${y0}`; x += s; }
+    bg += `<path d="${d} V${BIG} H${-W * 2} Z" fill="${col}"/>`;
+  }
+  bg += `<path d="M${-W * 2},${-H + 120} C${-W},${-H + 90} ${-W * 0.3},${-H + 160} ${W * 0.4},${-H + 110} S${W * 1.4},${-H + 150} ${W * 2},${-H + 120}" stroke="#7f8fd8" stroke-width="10" fill="none" opacity=".5"/>`;
+  for (let i = 0; i < 220; i++) {
+    const x = (rnd('lx' + i) - 0.5) * W * 3.4, y = -H + 60 + rnd('ly' + i) * 140;
+    bg += `<circle ${i % 5 ? '' : `class="twinkle t${i % 3}" `}cx="${f1(x)}" cy="${f1(y)}" r="${f1(0.7 + rnd('lr' + i) * 1.2)}" fill="${i % 4 ? '#ffd98a' : '#cfe0ff'}"/>`;
+  }
+  const view = (x, y, ww, hh, seed) => {
+    let g = `<svg x="${x}" y="${y}" width="${ww}" height="${hh}" overflow="hidden"><rect width="${ww}" height="${hh}" fill="url(#${uid}wview)"/>`;
+    for (let i = 0; i < 12; i++) g += `<circle cx="${f1(rnd(seed + 's' + i) * ww)}" cy="${f1(rnd(seed + 't' + i) * hh * 0.5)}" r="${f1(0.5 + rnd(seed + 'u' + i))}" fill="#fff"/>`;
+    g += `<path d="M0,${f1(hh * 0.55)} L${f1(ww * 0.25)},${f1(hh * 0.36)} L${f1(ww * 0.5)},${f1(hh * 0.5)} L${f1(ww * 0.78)},${f1(hh * 0.32)} L${ww},${f1(hh * 0.48)} V${hh} H0 Z" fill="#1b2150"/>`;
+    g += `<rect y="${f1(hh * 0.68)}" width="${ww}" height="${f1(hh * 0.32)}" fill="#11163a"/><path d="M0,${f1(hh * 0.8)} Q${f1(ww * 0.5)},${f1(hh * 0.74)} ${ww},${f1(hh * 0.84)}" stroke="#8090dd" stroke-width="2.5" fill="none" opacity=".6"/>`;
+    for (let i = 0; i < 14; i++) g += `<circle cx="${f1(rnd(seed + 'x' + i) * ww)}" cy="${f1(hh * 0.7 + rnd(seed + 'y' + i) * hh * 0.28)}" r=".9" fill="${i % 3 ? '#ffd98a' : '#cfe0ff'}"/>`;
+    return g + '</svg>';
   };
-  const ends = [];
-  disc(ends, (z, stub, end) => `<g transform="${faceY(0, N, z)}">${stub}</g><g transform="${faceX(N + 0.28, 0.2, z)}">${end.replace(/cx="9"/g, 'cx="10"')}</g>`);
-  disc(ends, (z, stub, end) => `<g transform="${faceX(0, N + 0.28, z)}">${stub}</g><g transform="${faceY(N + 0.28, -0.42, z)}">${end}</g>`);
-  back3d += ends.join('');
-  return { walls, back3d, defs };
+  const walls = onWalls(N, (id) => {
+    let s = stones(W, 0, H, 'w' + id, w, { rh: [26, 34], sw: [50, 90], r: 1.5, mortar: 0.84 });
+    s += `<rect width="${W}" height="${H}" fill="#2a1d40" opacity=".12"/>`;
+    for (let u0 = 0; u0 < W; u0 += 64) {
+      const x = u0 + 11, ww = 42, top = 26, bot = H - 12, r = ww / 2;
+      s += `<path d="M${x - 4},${bot} V${top + r} A${r + 4},${r + 4} 0 0 1 ${x + ww + 4},${top + r} V${bot} Z" fill="${shade(w, 1.12)}"/>`;
+      s += view(x, top, ww, bot - top, id + u0);
+      s += `<path d="M${x},${top} H${x + ww} V${top + r} A${r},${r} 0 0 0 ${x},${top + r} Z" fill="${shade(w, 1.12)}"/>`;
+      s += `<path d="M${x},${bot} V${top + r} A${r},${r} 0 0 1 ${x + ww},${top + r} V${bot}" stroke="${shade(w, 0.7)}" stroke-width="1.2" fill="none"/><path d="M${x + ww / 2 - 4},${top - 3} h8 l-1.5,8 h-5 Z" fill="${shade(w, 1.2)}"/>`;
+      // Barandilla de la terraza
+      s += `<rect x="${x}" y="${bot - 28}" width="${ww}" height="3" fill="#d9d6e8"/><rect x="${x}" y="${bot - 4}" width="${ww}" height="4" fill="#bcb8d4"/>`;
+      for (let b = x + 3; b < x + ww - 2; b += 6) s += `<rect x="${b}" y="${bot - 25}" width="2.6" height="21" rx="1.3" fill="#cfcbe2"/>`;
+      // Cortinas finas movidas por el viento
+      s += `<path class="curtain" d="M${x + 1},${top + 6} q10,40 3,${f1((bot - top) * 0.55)} q-3,${f1((bot - top) * 0.2)} 2,${f1((bot - top) * 0.38)} h-6 V${top + 6} Z" fill="url(#${uid}curt)"/>`;
+      s += `<path class="curtain c2" d="M${x + ww - 1},${top + 6} q-10,40 -3,${f1((bot - top) * 0.55)} q3,${f1((bot - top) * 0.2)} -2,${f1((bot - top) * 0.38)} h6 V${top + 6} Z" fill="url(#${uid}curt)"/>`;
+    }
+    // Friso con estrellas plateadas
+    s += `<rect width="${W}" height="14" fill="${shade(w, 0.85)}"/><rect y="14" width="${W}" height="2" fill="#c9cbe0"/>`;
+    for (let u = 12; u < W; u += 24) s += `<path d="M${u},2 L${u + 1.6},5.4 L${u + 5},7 L${u + 1.6},8.6 L${u},12 L${u - 1.6},8.6 L${u - 5},7 L${u - 1.6},5.4 Z" fill="#dfe2f5"/>`;
+    return s;
+  });
+  // Estrella de ocho puntas de plata en el suelo
+  const R = Math.min(N * 32 * 0.26, 90), c = N * 16;
+  let st = `<circle cx="${c}" cy="${c}" r="${R}" fill="none" stroke="#c9cbe0" stroke-width="1.6" opacity=".8"/><circle cx="${c}" cy="${c}" r="${R * 0.3}" fill="none" stroke="#c9cbe0" stroke-width="1" opacity=".8"/>`;
+  const pts = Array.from({ length: 16 }, (_, i) => { const a = (i * Math.PI) / 8, rr = i % 2 ? R * 0.3 : (i % 4 ? R * 0.62 : R * 0.95); return [c + Math.cos(a) * rr, c + Math.sin(a) * rr]; });
+  st += `<path d="${pathOf(pts)}Z" fill="#dfe2f5" opacity=".22" stroke="#dfe2f5" stroke-width="1"/>`;
+  const back3d = `<g transform="${floorM(0, 0, 0.4)}">${st}</g>`;
+  // Ráfagas de viento y luces feéricas flotando
+  let fore = '';
+  for (let i = 0; i < 5; i++) {
+    const [x0, y0] = P(0, 1 + rnd('wy' + i) * (N - 2), 60 + rnd('wz' + i) * 120), [x1, y1] = P(N, 1 + rnd('wv' + i) * (N - 2), 60 + rnd('ww' + i) * 120);
+    fore += `<path class="windline" style="animation-delay:-${f1(rnd('wd' + i) * 6)}s" d="M${x0},${y0} C${f1(x0 + 120)},${f1(y0 - 40)} ${f1(x1 - 140)},${f1(y1 + 40)} ${x1},${y1}" stroke="#e8ecff" stroke-width="1.4" fill="none" opacity=".45" stroke-linecap="round"/>`;
+  }
+  let lights = '';
+  for (let i = 0; i < Math.round(N * 1.3); i++) {
+    const [x, y] = P(0.6 + rnd('fx' + i) * (N - 1.2), 0.6 + rnd('fy' + i) * (N - 1.2), 120 + rnd('fz' + i) * 110);
+    lights += `<g class="float" style="animation-delay:-${f1(rnd('fd' + i) * 4)}s"><circle cx="${x}" cy="${y}" r="12" fill="#cfe0ff" opacity=".18"/><circle cx="${x}" cy="${y}" r="5" fill="#e6eeff" opacity=".5"/><circle cx="${x}" cy="${y}" r="2.2" fill="#fff"/></g>`;
+  }
+  return { bg, walls, back3d, fore, lights, defs, noBaseboard: true, cap: shade(w, 1.05) };
 }
 
 // ---- Biblioteca victoriana: papel adamascado, friso de cuarterones y molduras ----
@@ -483,13 +586,13 @@ function glasshouse(room, N, uid, night) {
   const hl = Array.from({ length: 12 }, (_, i) => D(Math.PI * 0.55 + i * 0.07, 0.35 + i * 0.05));
   fore += `<path d="${pathOf(hl)}" stroke="#fff" stroke-width="7" stroke-linecap="round" fill="none" opacity=".18"/>`;
   const [ax, ay] = P(cx, cy, H + Rz);
-  fore += `<path d="M${ax - 10},${ay + 2} h20 l-3,-16 h-14 Z" fill="${iron}" opacity=".9"/><path d="M${ax - 7},${ay - 14} q7,-12 14,0 Z" fill="${iron}"/><line x1="${ax}" y1="${ay - 20}" x2="${ax}" y2="${ay - 34}" stroke="${iron}" stroke-width="2"/><circle cx="${ax}" cy="${ay - 35}" r="2.5" fill="#d4af37"/>`;
+  back3d += `<path d="M${ax - 10},${ay + 2} h20 l-3,-16 h-14 Z" fill="${iron}" opacity=".9"/><path d="M${ax - 7},${ay - 14} q7,-12 14,0 Z" fill="${iron}"/><line x1="${ax}" y1="${ay - 20}" x2="${ax}" y2="${ay - 34}" stroke="${iron}" stroke-width="2"/><circle cx="${ax}" cy="${ay - 35}" r="2.5" fill="#d4af37"/>`;
   // Paredes de cristal delanteras (solo los hierros, muy suaves, para no tapar)
   const frontPost = (a, b) => `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${iron}" stroke-width="1.8" opacity=".38"/>`;
   for (let i = 0; i <= N; i += 2) { fore += frontPost(P(N, i, 0), P(N, i, H)) + frontPost(P(i, N, 0), P(i, N, H)); }
   for (const z of [H, H - 74]) fore += frontPost(P(N, 0, z), P(N, N, z)) + frontPost(P(0, N, z), P(N, N, z));
   fore += `<path d="${pathOf([P(N, 0, H), P(N, N, H), P(N, N, 0), P(N, 0, 0)])}Z" fill="#eafaf6" opacity=".05"/><path d="${pathOf([P(0, N, H), P(N, N, H), P(N, N, 0), P(0, N, 0)])}Z" fill="#eafaf6" opacity=".05"/>`;
-  return { bg, walls, back3d, fore, defs, noBaseboard: true, cap: '#eef2ee' };
+  return { bg, walls, back3d, defs, noBaseboard: true, cap: '#eef2ee' };
 }
 
 // =====================================================================================
@@ -564,6 +667,13 @@ export function floorScene(room, N, uid, fa, fb, night) {
       const t = (i / (N * 6)) * N, [x1, y1] = P(t, N, 0), [x2, y2] = P(N, t, 0);
       edge += `<path d="M${x1},${y1} q-1,4 -2,7 M${x2},${y2} q1,4 2,7" stroke="${shade(fa, 0.85)}" stroke-width="1.4"/>`;
     }
+  } else if (f === 'nightstone') {
+    local = `<rect width="${W}" height="${W}" fill="${fb}"/>`;
+    for (let u = 0; u < W; u += 64) for (let v = 0; v < W; v += 64) local += `<rect x="${u + 1}" y="${v + 1}" width="62" height="62" fill="${shade(fa, 0.9 + rnd('ns' + u + '-' + v) * 0.2)}"/>`;
+    for (let i = 0; i < N * 2; i++) { const x = rnd('nx' + i) * W, y = rnd('ny' + i) * W; local += `<path d="M${f1(x)},${f1(y)} q14,8 20,24 t12,26" stroke="#8f96c8" stroke-width=".7" fill="none" opacity=".35"/>`; }
+    for (let i = 0; i <= N; i += 2) local += `<path d="M${i * 32},0 V${W} M0,${i * 32} H${W}" stroke="#a9aed8" stroke-width=".8" opacity=".45"/>`;
+    defs += `<linearGradient id="${uid}sheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".45" stop-color="#cfd6ff" stop-opacity=".16"/><stop offset=".55" stop-color="#fff" stop-opacity=".03"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>`;
+    local += `<rect width="${W}" height="${W}" fill="url(#${uid}sheen)"/>`;
   } else { // moquetas
     local = `<rect width="${W}" height="${W}" fill="${fa}"/>`;
     for (let i = 0; i < N * N * 3; i++) local += `<circle cx="${f1(rnd('cx' + i) * W)}" cy="${f1(rnd('cy' + i) * W)}" r="${f1(0.6 + rnd('cr' + i))}" fill="${shade(fa, rnd('cs' + i) > 0.5 ? 1.08 : 0.92)}"/>`;

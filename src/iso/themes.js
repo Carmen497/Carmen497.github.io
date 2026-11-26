@@ -23,16 +23,16 @@ export const THEMES = [
   {
     id: 'castillo', label: 'Castillo medieval', desc: 'Almenas, piedra, armaduras y un trono',
     wall: '#a39a8d', wallStyle: 'stone', floor: 'flagstone',
-    items: [a('tapestry', 5, { color: '#6a2c3a' }), a('torch', 2), a('torch', 7), b('torch', 0), b('shield', 3, { color: '#2e4a7a' }),
-      b('banner', 6, { color: '#8c2b3a' }), b('banner', 7, { color: '#2e4a7a' }), f('armor', 6, 0), f('armor', 0, 6),
+    items: [a('balcony', 5), b('tapestry', 6, { color: '#6a2c3a' }), a('torch', 2), a('torch', 7), b('torch', 0), b('shield', 3, { color: '#2e4a7a' }),
+      a('banner', 0, { color: '#8c2b3a' }), f('armor', 6, 0), f('armor', 0, 2),
       f('rug', 2, 3, { color: '#8c2b3a' }), f('throne', 3, 2, { color: '#8c2b3a' }), f('chest', 1, 6, { color: '#5a3a24' }), f('candles', 5, 2), f('candles', 6, 5)],
   },
   {
-    id: 'cuento', label: 'Castillo de cuento', desc: 'Rosa y dorado, ventanales, espejo y fuente',
-    wall: '#efd5e3', wallStyle: 'stripes', floor: 'checker',
-    items: [b('archwindow', 6), a('archwindow', 5), a('mirror', 1), b('candelabra', 3), a('lights', 0),
-      f('throne', 3, 2, { color: '#d77fa1' }), f('roundrug', 2, 4, { color: '#c9a0dc' }), f('sofa', 4, 6, { color: '#e8a6c1' }),
-      f('fountain', 6, 3), f('bigplant', 7, 2), f('pouf', 1, 5, { color: '#f3c6d8' }), f('cat', 5, 3, { color: '#f4f1ec' })],
+    id: 'viento', label: 'Casa del Viento', desc: 'Palacio en la montaña con arcos abiertos al cielo estrellado y la ciudad del valle',
+    wall: '#c9a57e', wallStyle: 'wind', floor: 'nightstone',
+    items: [a('candelabra', 1), b('candelabra', 3), f('roundrug', 3, 3, { color: '#2e3a6b' }), f('sofa', 2, 5, { color: '#2e3a6b' }),
+      f('armchair', 5, 4, { color: '#3d4a85' }), f('table', 4, 4), f('pouf', 2, 3, { color: '#c9b8e8' }), f('bigplant', 7, 1), f('plant', 0, 1),
+      f('stack', 6, 6), f('candles', 5, 6), f('cat', 1, 6, { color: '#2c2a30' })],
   },
   {
     id: 'hadas', label: 'Bosque de hadas', desc: 'Al aire libre entre árboles, con setas y luciérnagas',
@@ -68,10 +68,10 @@ export const THEMES = [
       f('lamp', 4, 4), f('stack', 7, 5), f('plant', 7, 2)],
   },
   {
-    id: 'cabana', label: 'Cabaña de montaña', desc: 'Troncos, chimenea, mantas y luz cálida',
-    wall: '#a5734a', wallStyle: 'logs', floor: 'wood',
-    items: [f('fireplace', 0, 5, { rot: 1 }), b('window', 6), a('painting', 1, { color: '#4f7a6b' }), a('wallshelf', 5, { color: '#5a3d2b' }), b('lights', 0),
-      f('rug', 2, 4, { color: '#7a3b2a' }), f('armchair', 2, 4, { color: '#a33a2e' }), f('table', 3, 5), f('stack', 4, 4), f('lamp', 5, 4),
+    id: 'cabana', label: 'Cabaña de montaña', desc: 'Troncos, chimenea y leña, con montañas nevadas detrás',
+    wall: '#a8723f', wallStyle: 'logs', floor: 'wood',
+    items: [f('fireplace', 0, 5, { rot: 1 }), b('window', 6), a('painting', 1, { color: '#4f7a6b' }), a('wallshelf', 5, { color: '#5a3d2b' }), b('antlers', 3), b('lights', 0),
+      f('rug', 2, 4, { color: '#8c3a2e' }), f('woodpile', 1, 5), f('armchair', 2, 4, { color: '#a33a2e' }), f('table', 3, 5), f('stack', 4, 4), f('lamp', 5, 4),
       f('plant', 7, 1), f('candles', 6, 6), f('cat', 1, 6, { color: '#7a6a5a' })],
   },
 ];
