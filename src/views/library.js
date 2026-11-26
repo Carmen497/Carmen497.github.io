@@ -261,26 +261,34 @@ async function roomView(container, nav) {
       continueCard.append(h('button', { class: 'pill started-btn', onclick: () => showStarted(started) }, icon('book', 16), started.length > 1 ? `Ver mis ${started.length} libros empezados` : 'Ver libros empezados'));
     }
   }
+  // Libros empezados: tocar abre el libro; mantener pulsado da opciones (quitar de la lista, con confirmación)
   function showStarted(list) {
     const s = sheet(h('div', { class: 'stack' }, list.map((b) => {
       const url = coverUrl(b), pct = Math.round((b.progress || 0) * 100);
-      return h('div', { class: 'started-row' },
-        h('button', { class: 'continue-card flat', onclick: () => { s.close(); nav(`#/leer/${b.id}`); } },
-          url ? h('img', { src: url, alt: '' }) : h('div', { class: 'mini-cover', style: { background: b.spineColor } }),
-          h('div', { class: 'cc-text' },
-            h('strong', {}, b.title),
-            h('span', { class: 'muted small' }, b.author || ''),
-            h('div', { class: 'progress thin' }, h('div', { class: 'progress-fill', style: { width: `${pct}%` } }))),
-          h('span', { class: 'cc-pct' }, `${pct}%`)),
-        iconBtn('more', () => { s.close(); openBook(b.id, { nav }); }, 'Ficha del libro'),
-        iconBtn('close', async () => {
-          b.status = 'pendiente';
-          await putBook(b);
-          s.close();
-          toast(`«${b.title}» ya no sale en empezados (sigue en tu biblioteca)`);
-          window.dispatchEvent(new Event('library-changed'));
-        }, 'Quitar de empezados'));
-    })), { title: 'Libros empezados', tall: true });
+      const card = h('button', { class: 'continue-card flat started-card' },
+        url ? h('img', { src: url, alt: '' }) : h('div', { class: 'mini-cover', style: { background: b.spineColor } }),
+        h('div', { class: 'cc-text' },
+          h('strong', {}, b.title),
+          h('span', { class: 'muted small' }, b.author || ''),
+          h('div', { class: 'progress thin' }, h('div', { class: 'progress-fill', style: { width: `${pct}%` } }))),
+        h('span', { class: 'cc-pct' }, `${pct}%`));
+      onLongPress(card, () => startedOptions(b, s), () => { s.close(); nav(`#/leer/${b.id}`); });
+      return card;
+    }), h('p', { class: 'muted small', style: { textAlign: 'center' } }, 'Mantén pulsado un libro para quitarlo de esta lista.')), { title: 'Libros empezados', tall: true });
+  }
+  function startedOptions(b, parent) {
+    const o = sheet(h('div', { class: 'stack' },
+      btn([icon('trash', 18), ' Quitar de empezados'], async () => {
+        o.close();
+        if (!(await confirmDialog(`¿Quitar «${b.title}» de tus libros empezados? Seguirá en tu biblioteca y se guarda por dónde ibas.`, { ok: 'Quitar', danger: true }))) return;
+        b.status = 'pendiente';
+        await putBook(b);
+        parent.close();
+        toast('Quitado de empezados');
+        window.dispatchEvent(new Event('library-changed'));
+      }, 'danger'),
+      btn([icon('book', 18), ' Ver la ficha del libro'], () => { o.close(); parent.close(); openBook(b.id, { nav }); }, 'ghost')),
+    { title: b.title });
   }
   renderContinue();
 
@@ -514,4 +522,20 @@ export function bookCard(b, nav) {
     h('div', { class: 'book-card-title' }, b.title),
     h('div', { class: 'book-card-author muted' }, b.author || ''),
     b.rating ? h('div', { class: 'mini-stars' }, '★'.repeat(Math.round(b.rating))) : null);
+}
+
+// Mantener pulsado (móvil) o clic derecho (ordenador). Un toque normal hace onTap.
+function onLongPress(el, onLong, onTap) {
+  let timer = null, fired = false, start = null;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  el.addEventListener('pointerdown', (e) => {
+    fired = false; start = [e.clientX, e.clientY];
+    cancel();
+    timer = setTimeout(() => { fired = true; timer = null; navigator.vibrate?.(15); onLong(); }, 550);
+  });
+  el.addEventListener('pointermove', (e) => { if (start && Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 10) cancel(); });
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); if (!fired) { cancel(); fired = true; onLong(); } });
+  el.addEventListener('click', (e) => { if (fired) { e.preventDefault(); fired = false; return; } onTap(); });
 }

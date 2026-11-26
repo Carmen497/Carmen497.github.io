@@ -558,5 +558,7 @@ body.dragging::after {
 
 /* ---------- Libros empezados ---------- */
 .started-btn { display: flex; margin: 8px auto 0; }
-.started-row { display: flex; align-items: center; gap: 6px; }
-.started-row .continue-card.flat { box-shadow: none; background: var(--bg-soft, rgba(0,0,0,.04)); max-width: none; }
+.started-card.continue-card { box-shadow: none; background: var(--bg-soft, rgba(0,0,0,.04)); max-width: none; min-width: 0;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.started-card img, .started-card .mini-cover { pointer-events: none; -webkit-user-drag: none; }
+.started-card .cc-pct { flex: none; min-width: 3.4em; text-align: right; }
