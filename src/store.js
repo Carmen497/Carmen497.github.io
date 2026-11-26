@@ -174,8 +174,9 @@ export async function shelves() {
 
 // ---- Estanterías automáticas ----
 // Una estantería puede guardar los libros que tú pones (auto = '') o enseñar sola los que cumplen una regla.
-// Empezado: con algo leído (o marcado «Leyendo») y sin terminar ni abandonar
-export const isStarted = (b) => b.status !== 'leido' && b.status !== 'abandonado' && (b.status === 'leyendo' || ((b.progress || 0) > 0.005 && (b.progress || 0) < 0.99));
+// Empezado: marcado «Leyendo» (el lector lo marca solo al pasar de la primera página).
+// Si lo cambias a «Pendiente», deja de salir como empezado aunque tenga páginas leídas.
+export const isStarted = (b) => b.status === 'leyendo' || (!b.status && (b.progress || 0) > 0.005 && (b.progress || 0) < 0.99);
 export const AUTO_RULES = [
   ['', 'Los libros que yo ponga'],
   ['nuevos', 'Libros nuevos (todos los #)'],

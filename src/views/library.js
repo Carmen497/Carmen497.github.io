@@ -257,8 +257,8 @@ async function roomView(container, nav) {
         h('strong', {}, reading.title),
         h('div', { class: 'progress thin' }, h('div', { class: 'progress-fill', style: { width: `${Math.round((reading.progress || 0) * 100)}%` } }))),
       h('span', { class: 'cc-pct' }, `${Math.round((reading.progress || 0) * 100)}%`)));
-    if (started.length > 1) {
-      continueCard.append(h('button', { class: 'pill started-btn', onclick: () => showStarted(started) }, icon('book', 16), `Ver mis ${started.length} libros empezados`));
+    if (started.length) {
+      continueCard.append(h('button', { class: 'pill started-btn', onclick: () => showStarted(started) }, icon('book', 16), started.length > 1 ? `Ver mis ${started.length} libros empezados` : 'Ver libros empezados'));
     }
   }
   function showStarted(list) {
@@ -272,7 +272,14 @@ async function roomView(container, nav) {
             h('span', { class: 'muted small' }, b.author || ''),
             h('div', { class: 'progress thin' }, h('div', { class: 'progress-fill', style: { width: `${pct}%` } }))),
           h('span', { class: 'cc-pct' }, `${pct}%`)),
-        iconBtn('more', () => { s.close(); openBook(b.id, { nav }); }, 'Ficha del libro'));
+        iconBtn('more', () => { s.close(); openBook(b.id, { nav }); }, 'Ficha del libro'),
+        iconBtn('close', async () => {
+          b.status = 'pendiente';
+          await putBook(b);
+          s.close();
+          toast(`«${b.title}» ya no sale en empezados (sigue en tu biblioteca)`);
+          window.dispatchEvent(new Event('library-changed'));
+        }, 'Quitar de empezados'));
     })), { title: 'Libros empezados', tall: true });
   }
   renderContinue();
