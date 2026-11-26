@@ -1,46 +1,12 @@
 // Dibujo de la biblioteca en vista isométrica (SVG generado).
 // Coordenadas del mundo: x hacia abajo-derecha, y hacia abajo-izquierda, z hacia arriba (en píxeles).
 
-export const WALL_H = 170;
+import { WALL_H, proj, f1, pt, poly, shade, box, faceX, faceY, floorM, cyl, hashFrac, skyColors, COMMON_DEFS } from './geom.js';
+import { wallScene, floorScene, onWalls } from './scenes.js';
+export { WALL_H, proj, shade };
 const SHELF_H = 128;
 export const SHELF_ROWS = 4;
 export const SHELF_PER_ROW = 10;
-
-export const proj = (x, y, z = 0) => [(x - y) * 32, (x + y) * 16 - z];
-const f1 = (n) => Math.round(n * 10) / 10;
-const pt = (x, y, z) => proj(x, y, z).map(f1).join(',');
-const poly = (pts, attrs) => `<polygon points="${pts.map((p) => pt(...p)).join(' ')}" ${attrs}/>`;
-
-export function shade(hex, f) {
-  const n = parseInt((hex || '#888888').slice(1), 16);
-  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  if (f <= 1) { r *= f; g *= f; b *= f; } else { const k = f - 1; r += (255 - r) * k; g += (255 - g) * k; b += (255 - b) * k; }
-  return '#' + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
-}
-
-function box(x0, y0, z0, w, d, hh, color) {
-  const z1 = z0 + hh;
-  return poly([[x0, y0, z1], [x0 + w, y0, z1], [x0 + w, y0 + d, z1], [x0, y0 + d, z1]], `fill="${shade(color, 1.15)}"`)
-    + poly([[x0, y0 + d, z0], [x0 + w, y0 + d, z0], [x0 + w, y0 + d, z1], [x0, y0 + d, z1]], `fill="${shade(color, 0.92)}"`)
-    + poly([[x0 + w, y0, z0], [x0 + w, y0 + d, z0], [x0 + w, y0 + d, z1], [x0 + w, y0, z1]], `fill="${shade(color, 0.74)}"`);
-}
-const faceY = (yc, xStart, zTop) => { const [ox, oy] = proj(xStart, yc, zTop); return `matrix(1,0.5,0,1,${f1(ox)},${f1(oy)})`; };
-const faceX = (xc, yEnd, zTop) => { const [ox, oy] = proj(xc, yEnd, zTop); return `matrix(1,-0.5,0,1,${f1(ox)},${f1(oy)})`; };
-const floorM = (x, y, z = 0) => { const [ox, oy] = proj(x, y, z); return `matrix(1,0.5,-1,0.5,${f1(ox)},${f1(oy)})`; };
-
-function cyl(cx, cy, z0, r, hh, color) {
-  const rx = r * 45.25, ry = rx / 2;
-  const [bx, by] = proj(cx, cy, z0);
-  const ty = by - hh;
-  return `<path d="M${f1(bx - rx)},${f1(ty)} L${f1(bx - rx)},${f1(by)} A${f1(rx)},${f1(ry)} 0 0 0 ${f1(bx + rx)},${f1(by)} L${f1(bx + rx)},${f1(ty)} Z" fill="${shade(color, 0.82)}"/>`
-    + `<ellipse cx="${f1(bx)}" cy="${f1(ty)}" rx="${f1(rx)}" ry="${f1(ry)}" fill="${shade(color, 1.1)}"/>`;
-}
-
-function hashFrac(str) {
-  let h = 2166136261;
-  for (const ch of str) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
-  return ((h >>> 0) % 1000) / 1000;
-}
 
 // ---------- Catálogo de objetos ----------
 export const CATALOG = [
@@ -364,12 +330,6 @@ function drawRug(it) {
 }
 
 // ---------- Objetos de pared ----------
-function skyColors(hour) {
-  if (hour >= 7 && hour < 18) return ['#8fc4ea', '#d6ecf7'];
-  if (hour >= 18 && hour < 21) return ['#e9906a', '#f6cf8f'];
-  if (hour >= 5 && hour < 7) return ['#a99ed0', '#f3c6a5'];
-  return ['#1c2448', '#3a4372'];
-}
 
 function drawWallItem(it) {
   const c = catalogOf(it.type);
@@ -481,49 +441,47 @@ export const FLOOR_OPTIONS = [
   { id: 'marble', label: 'Mármol blanco y negro' }, { id: 'terracotta', label: 'Barro cocido' }, { id: 'tatami', label: 'Tatami' },
 ];
 export const WALL_STYLES = [
-  { id: 'plain', label: 'Lisa' }, { id: 'stone', label: 'Piedra' }, { id: 'timber', label: 'Vigas de madera' }, { id: 'logs', label: 'Troncos' },
-  { id: 'wainscot', label: 'Friso de madera' }, { id: 'stripes', label: 'Rayas con dorado' }, { id: 'leaves', label: 'Hojas' },
-  { id: 'glass', label: 'Cristal' }, { id: 'stars', label: 'Estrellas' }, { id: 'shoji', label: 'Papel de arroz' },
+  { id: 'plain', label: 'Lisa' }, { id: 'stone', label: 'Piedra de castillo' }, { id: 'timber', label: 'Taberna (vigas)' }, { id: 'logs', label: 'Troncos' },
+  { id: 'wainscot', label: 'Victoriana' }, { id: 'stripes', label: 'Palacio rosa y dorado' }, { id: 'leaves', label: 'Bosque (al aire libre)' },
+  { id: 'glass', label: 'Invernadero de cristal' }, { id: 'stars', label: 'Torre de piedra' }, { id: 'shoji', label: 'Japonesa (shoji)' },
 ];
 export const WALL_OPTIONS = ['#e9d8c0', '#d6c2a8', '#c9d6c3', '#c8d4e0', '#e8c9c0', '#d9d0e6', '#5b4a63', '#3e4a5a'];
 
-function drawRoomShell(room, edit, uid = '') {
-  const N = room.size;
+const shellCache = new Map();
+function drawRoomShell(room, edit, uid = '', night = false) {
+  const key = [room.size, room.wall, room.wallStyle, room.floor, edit, uid, night, new Date().getHours()].join('|');
+  if (shellCache.has(key)) return shellCache.get(key);
+  if (shellCache.size > 30) shellCache.clear();
+  const out = buildShell(room, edit, uid, night);
+  shellCache.set(key, out);
+  return out;
+}
+function buildShell(room, edit, uid, night) {
+  const N = room.size, W = N * 32;
   const [fa, fb] = FLOORS[room.floor] || FLOORS.wood;
   const wall = room.wall || '#e9d8c0';
-  let s = '';
-  // Paredes
-  s += poly([[0, 0, 0], [0, N, 0], [0, N, WALL_H], [0, 0, WALL_H]], `fill="${shade(wall, 0.9)}" data-wall="a"`);
-  s += poly([[0, 0, 0], [N, 0, 0], [N, 0, WALL_H], [0, 0, WALL_H]], `fill="${wall}" data-wall="b"`);
-  const ws = wallStyleSvg(room, N, uid);
-  if (ws) s += `<defs>${ws.defs}</defs><g pointer-events="none" transform="${faceX(0, N, WALL_H)}">${ws.body}<rect width="${N * 32}" height="${WALL_H}" fill="#000" opacity=".1"/></g><g pointer-events="none" transform="${faceY(0, 0, WALL_H)}">${ws.body}</g>`;
-  // Grosor superior de la pared
-  s += poly([[0, 0, WALL_H], [N, 0, WALL_H], [N, -0.25, WALL_H], [-0.25, -0.25, WALL_H], [-0.25, N, WALL_H], [0, N, WALL_H]], `fill="${shade(wall, 0.7)}"`);
-  s += poly([[0, N, 0], [0, N, WALL_H], [-0.25, N, WALL_H], [-0.25, N, 0]], `fill="${shade(wall, 0.6)}"`);
-  s += poly([[N, 0, 0], [N, 0, WALL_H], [N, -0.25, WALL_H], [N, -0.25, 0]], `fill="${shade(wall, 0.65)}"`);
-  // Rodapiés
-  s += poly([[0, 0, 0], [0, N, 0], [0, N, 9], [0, 0, 9]], `fill="${shade(wall, 0.62)}"`);
-  s += poly([[0, 0, 0], [N, 0, 0], [N, 0, 9], [0, 0, 9]], `fill="${shade(wall, 0.7)}"`);
-  // Suelo
-  s += poly([[0, 0, 0], [N, 0, 0], [N, N, 0], [0, N, 0]], `fill="${fa}" data-floor="1"`);
-  // Borde del suelo (grosor)
-  s += poly([[0, N, 0], [N, N, 0], [N, N, -14], [0, N, -14]], `fill="${shade(fa, 0.7)}"`);
-  s += poly([[N, 0, 0], [N, N, 0], [N, N, -14], [N, 0, -14]], `fill="${shade(fa, 0.55)}"`);
-  const fl = floorStyleSvg(room, N, uid, fa, fb);
-  if (fl) s += `<g pointer-events="none">${fl}</g>`;
-  else if (room.floor === 'tiles' || room.floor === 'checker' || room.floor === 'marble') {
-    for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if ((x + y) % 2) s += poly([[x, y, 0], [x + 1, y, 0], [x + 1, y + 1, 0], [x, y + 1, 0]], `fill="${fb}" pointer-events="none"`);
-  } else {
-    for (let y = 0; y < N; y += 0.5) {
-      s += `<line x1="${pt(0, y, 0).split(',')[0]}" y1="${pt(0, y, 0).split(',')[1]}" x2="${pt(N, y, 0).split(',')[0]}" y2="${pt(N, y, 0).split(',')[1]}" stroke="${fb}" stroke-width="1.2" pointer-events="none"/>`;
-    }
-    if (room.floor.includes('wood')) {
-      for (let i = 0; i < N * 2; i++) {
-        const y = i * 0.5, off = (i * 1.7) % 2;
-        for (let x = off; x < N; x += 2.2) s += `<line x1="${pt(x, y, 0).split(',')[0]}" y1="${pt(x, y, 0).split(',')[1]}" x2="${pt(x, y + 0.5, 0).split(',')[0]}" y2="${pt(x, y + 0.5, 0).split(',')[1]}" stroke="${fb}" stroke-width="1" pointer-events="none"/>`;
-      }
+  const sc = wallScene(room, N, uid, night);
+  const fl = floorScene(room, N, uid, fa, fb, night);
+  let s = `<defs>${sc.defs || ''}${fl.defs || ''}</defs>` + (sc.bg || '');
+  if (!sc.hideWalls) {
+    s += poly([[0, 0, 0], [0, N, 0], [0, N, WALL_H], [0, 0, WALL_H]], `fill="${shade(wall, 0.9)}" data-wall="a"`);
+    s += poly([[0, 0, 0], [N, 0, 0], [N, 0, WALL_H], [0, 0, WALL_H]], `fill="${wall}" data-wall="b"`);
+    s += sc.walls || '';
+    // Luz: más clara arriba, más oscura abajo y en la esquina; la pared izquierda un poco en sombra
+    s += onWalls(N, (id) => `<rect width="${W}" height="${WALL_H}" fill="url(#wl)"/><rect width="70" height="${WALL_H}" fill="url(#wc)"/>${id === 'a' ? `<rect width="${W}" height="${WALL_H}" fill="#0b0a14" opacity=".12"/>` : ''}`);
+    const cap = sc.cap || wall;
+    s += poly([[0, 0, WALL_H], [N, 0, WALL_H], [N, -0.25, WALL_H], [-0.25, -0.25, WALL_H], [-0.25, N, WALL_H], [0, N, WALL_H]], `fill="${shade(cap, 0.75)}"`);
+    s += poly([[0, N, 0], [0, N, WALL_H], [-0.25, N, WALL_H], [-0.25, N, 0]], `fill="${shade(cap, 0.6)}"`);
+    s += poly([[N, 0, 0], [N, 0, WALL_H], [N, -0.25, WALL_H], [N, -0.25, 0]], `fill="${shade(cap, 0.65)}"`);
+    if (!sc.noBaseboard) {
+      s += poly([[0, 0, 0], [0, N, 0], [0, N, 9], [0, 0, 9]], `fill="${shade(wall, 0.62)}"`);
+      s += poly([[0, 0, 0], [N, 0, 0], [N, 0, 9], [0, 0, 9]], `fill="${shade(wall, 0.7)}"`);
     }
   }
+  // Suelo
+  s += poly([[0, 0, 0], [N, 0, 0], [N, N, 0], [0, N, 0]], `fill="${fa}" data-floor="1"`);
+  s += `<g pointer-events="none"><g transform="${floorM(0, 0, 0)}"><svg width="${W}" height="${W}" overflow="hidden">${fl.local}</svg></g>${fl.screen || ''}</g>`;
+  s += fl.edge || (poly([[0, N, 0], [N, N, 0], [N, N, -14], [0, N, -14]], `fill="${shade(fa, 0.7)}"`) + poly([[N, 0, 0], [N, N, 0], [N, N, -14], [N, 0, -14]], `fill="${shade(fa, 0.55)}"`));
   if (edit) {
     let g = '';
     for (let i = 0; i <= N; i++) {
@@ -532,7 +490,8 @@ function drawRoomShell(room, edit, uid = '') {
     }
     s += `<g class="grid" pointer-events="none">${g}</g>`;
   }
-  return s;
+  s += `<g pointer-events="none">${sc.back3d || ''}</g>`;
+  return { shell: s, fore: sc.fore || '', lights: sc.lights || '' };
 }
 
 function drawFloorItem(it, books, night) {
@@ -677,7 +636,9 @@ export function renderRoom(room, booksByShelf, { edit = false, selectedId = null
     <radialGradient id="glow"><stop offset="0" stop-color="#ffd27a" stop-opacity=".32"/><stop offset=".5" stop-color="#ffb84d" stop-opacity=".08"/><stop offset="1" stop-color="#ffb84d" stop-opacity="0"/></radialGradient>
     <radialGradient id="fireglow"><stop offset="0" stop-color="#ff9a3c" stop-opacity=".3"/><stop offset="1" stop-color="#ff7a2c" stop-opacity="0"/></radialGradient>
   </defs>`;
-  s += drawRoomShell(room, edit, uid);
+  s = s.replace('</defs>', COMMON_DEFS + '</defs>');
+  const shell = drawRoomShell(room, edit, uid, night);
+  s += shell.shell;
 
   const items = room.items;
   // Objetos de pared
@@ -702,14 +663,20 @@ export function renderRoom(room, booksByShelf, { edit = false, selectedId = null
     const fa = footprint(a), fb = footprint(b);
     return (a.x + a.y + (fa.w + fa.d) / 2) - (b.x + b.y + (fb.w + fb.d) / 2);
   });
+  // Sombra suave bajo cada mueble
+  for (const it of floorItems) {
+    const fp = footprint(it);
+    s += `<g transform="${floorM(it.x, it.y, 0)}" pointer-events="none"><ellipse cx="${fp.w * 16 + 3}" cy="${fp.d * 16 + 3}" rx="${fp.w * 16 + 6}" ry="${fp.d * 16 + 6}" fill="url(#softshadow)"/></g>`;
+  }
   for (const it of floorItems) {
     const g = drawFloorItem(it, booksByShelf[it.id] || [], night);
     s += `<g class="item ${it.type === 'shelf' ? 'shelf' : ''} ${it.id === selectedId ? 'selected' : ''}" data-id="${it.id}">${g}</g>`;
   }
 
+  s += shell.fore ? `<g pointer-events="none">${shell.fore}</g>` : '';
   // Luz nocturna
   if (night) {
-    s += `<rect x="${-N * 32 - 200}" y="${-WALL_H - 200}" width="${N * 64 + 400}" height="${N * 32 + WALL_H + 400}" fill="#0d1230" opacity=".38" pointer-events="none"/>`;
+    s += `<rect x="-4000" y="-4000" width="8000" height="8000" fill="#0d1230" opacity=".38" pointer-events="none"/>`;
     for (const it of items) {
       if (it.type === 'lamp') { const [x, y] = proj(it.x + 0.5, it.y + 0.5, 60); s += `<circle class="glow" cx="${x}" cy="${y}" r="60" fill="url(#glow)" pointer-events="none"/>`; }
       if (it.type === 'fireplace') { const fp = footprint(it); const [x, y] = proj(it.x + fp.w / 2, it.y + fp.d, 20); s += `<circle class="glow fire" cx="${x}" cy="${y}" r="65" fill="url(#fireglow)" pointer-events="none"/>`; }
@@ -729,6 +696,7 @@ export function renderRoom(room, booksByShelf, { edit = false, selectedId = null
     }
   }
 
+  if (shell.lights) s += `<g pointer-events="none">${shell.lights}</g>`;
   // Nombres de las estanterías
   if (labels && !edit) {
     for (const it of items.filter((i) => i.type === 'shelf' && i.name)) {
@@ -763,107 +731,6 @@ export function screenToWall(sx, sy, N, loose = false) {
     if (loose || (y >= 0 && y <= N && z >= 0 && z <= WALL_H)) return { wall: 'a', p: Math.floor(y), t: y };
   }
   return null;
-}
-
-// ---------- Estilos de pared y suelo de los temas ----------
-// Se dibujan en el plano de cada pared (o del suelo) con un patrón; el color base es el que elijas para las paredes.
-function wallStyleSvg(room, N, uid) {
-  const st = room.wallStyle || 'plain';
-  const w = room.wall || '#e9d8c0';
-  const W = N * 32, H = WALL_H, pid = `${uid}ws-p`;
-  let defs = '', body = '';
-  if (st === 'stone') {
-    defs = `<pattern id="${pid}" width="44" height="24" patternUnits="userSpaceOnUse"><rect width="44" height="24" fill="${shade(w, 0.72)}"/><rect x="1" y="1" width="42" height="10.5" rx="1.5" fill="${w}"/><rect x="-21" y="13" width="42" height="10" rx="1.5" fill="${shade(w, 1.07)}"/><rect x="23" y="13" width="42" height="10" rx="1.5" fill="${shade(w, 0.93)}"/><circle cx="12" cy="6" r="1.4" fill="${shade(w, 0.85)}"/><circle cx="34" cy="18" r="1" fill="${shade(w, 0.85)}"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/>`;
-  } else if (st === 'timber') {
-    const beam = '#5b3f2c';
-    defs = `<pattern id="${pid}" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="${w}"/><circle cx="7" cy="9" r="3" fill="${shade(w, 0.96)}"/><circle cx="22" cy="21" r="4" fill="${shade(w, 1.04)}"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/>`;
-    for (let x = 0; x < W; x += 96) {
-      body += `<path d="M${x + 6},${H - 10} L${x + 46},80 M${x + 90},${H - 10} L${x + 50},80" stroke="${beam}" stroke-width="6"/>`;
-    }
-    for (let x = 0; x <= W; x += 96) body += `<rect x="${x - 4}" y="0" width="8" height="${H}" fill="${beam}"/>`;
-    body += `<rect x="0" y="0" width="${W}" height="10" fill="${beam}"/><rect x="0" y="74" width="${W}" height="7" fill="${beam}"/>`;
-  } else if (st === 'logs') {
-    defs = `<pattern id="${pid}" width="130" height="18" patternUnits="userSpaceOnUse"><rect width="130" height="18" fill="${w}"/><rect width="130" height="3" fill="${shade(w, 1.15)}"/><rect y="14.5" width="130" height="3.5" fill="${shade(w, 0.6)}"/><ellipse cx="46" cy="9" rx="5" ry="2.2" fill="${shade(w, 0.78)}"/><path d="M90,7 h22" stroke="${shade(w, 0.85)}" stroke-width="1"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/>`;
-  } else if (st === 'wainscot') {
-    const wood = '#6b4630';
-    defs = `<pattern id="${pid}" width="24" height="24" patternUnits="userSpaceOnUse"><rect width="24" height="24" fill="${w}"/><path d="M12,4 l4,8 -4,8 -4,-8 Z" fill="${shade(w, 1.12)}"/><circle cx="0" cy="0" r="1.5" fill="${shade(w, 1.15)}"/><circle cx="24" cy="24" r="1.5" fill="${shade(w, 1.15)}"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/>`;
-    body += `<rect x="0" y="${H - 62}" width="${W}" height="62" fill="${wood}"/>`;
-    for (let x = 0; x < W; x += 48) body += `<rect x="${x + 6}" y="${H - 52}" width="36" height="38" fill="${shade(wood, 0.88)}" stroke="${shade(wood, 1.3)}" stroke-width="1.2"/>`;
-    body += `<rect x="0" y="${H - 66}" width="${W}" height="6" fill="${shade(wood, 0.75)}"/><rect x="0" y="0" width="${W}" height="7" fill="${shade(wood, 0.9)}"/>`;
-  } else if (st === 'stripes') {
-    defs = `<pattern id="${pid}" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="${w}"/><rect x="10" width="10" height="20" fill="${shade(w, 1.08)}"/><circle cx="15" cy="10" r="1.3" fill="${shade(w, 0.9)}"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/>`;
-    body += `<rect x="0" y="${H - 56}" width="${W}" height="56" fill="${shade(w, 0.9)}"/>`;
-    for (let x = 0; x < W; x += 32) body += `<rect x="${x + 5}" y="${H - 48}" width="22" height="34" rx="3" fill="none" stroke="#d4af37" stroke-width="1"/>`;
-    body += `<rect x="0" y="${H - 59}" width="${W}" height="4" fill="#d4af37"/><rect x="0" y="9" width="${W}" height="3" fill="#d4af37"/>`;
-  } else if (st === 'leaves') {
-    const d = shade(w, 0.82), l = shade(w, 1.12);
-    defs = `<pattern id="${pid}" width="46" height="40" patternUnits="userSpaceOnUse"><rect width="46" height="40" fill="${w}"/>`
-      + `<ellipse cx="10" cy="10" rx="2.6" ry="6" fill="${d}" transform="rotate(35 10 10)"/><ellipse cx="16" cy="9" rx="2.4" ry="5" fill="${l}" transform="rotate(-30 16 9)"/>`
-      + `<ellipse cx="33" cy="29" rx="2.6" ry="6" fill="${d}" transform="rotate(-40 33 29)"/><ellipse cx="39" cy="31" rx="2.2" ry="5" fill="${l}" transform="rotate(25 39 31)"/>`
-      + `<circle cx="28" cy="8" r="1.6" fill="#f7e7a6"/><circle cx="8" cy="31" r="1.4" fill="#f6c6d8"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/>`;
-    body += `<rect x="0" y="${H - 18}" width="${W}" height="18" fill="${shade(w, 0.75)}"/>`;
-    for (let x = 4; x < W; x += 9) body += `<path d="M${x},${H} q1,-9 ${(x * 7) % 5 - 2},-${12 + (x * 13) % 9}" stroke="${shade(w, 0.62)}" stroke-width="1.6" fill="none"/>`;
-  } else if (st === 'glass') {
-    const [a, b] = skyColors(new Date().getHours());
-    const night = a === '#1c2448';
-    defs = `<linearGradient id="${uid}ws-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`
-      + `<pattern id="${pid}" width="32" height="40" patternUnits="userSpaceOnUse"><rect width="32" height="40" fill="none" stroke="${shade(w, 1.2)}" stroke-width="3"/><path d="M4,6 l8,-3" stroke="#fff" stroke-width="1.2" opacity=".5"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${uid}ws-sky)"/>`;
-    if (night) for (let i = 0; i < W / 12; i++) body += `<circle cx="${f1(hashFrac('s' + i) * W)}" cy="${f1(hashFrac('t' + i) * 80)}" r=".8" fill="#fff" opacity=".8"/>`;
-    else for (let x = 20; x < W; x += 110) body += `<ellipse cx="${x}" cy="${30 + (x % 3) * 8}" rx="14" ry="5" fill="#fff" opacity=".75"/>`;
-    // Jardín de fuera
-    let hills = `M0,${H - 30}`;
-    for (let x = 0; x <= W; x += 40) hills += ` q20,-${14 + (x % 7) * 2} 40,0`;
-    body += `<path d="${hills} V${H} H0 Z" fill="${night ? '#24304f' : '#8bbf7f'}"/>`;
-    for (let x = 14; x < W; x += 58) body += `<circle cx="${x}" cy="${H - 44}" r="12" fill="${night ? '#1e2a44' : '#6fa86a'}"/><rect x="${x - 1.5}" y="${H - 36}" width="3" height="12" fill="${night ? '#1a2238' : '#6b5a3a'}"/>`;
-    body += `<rect width="${W}" height="${H - 22}" fill="url(#${pid})"/>`;
-    body += `<rect x="0" y="${H - 22}" width="${W}" height="22" fill="${shade(w, 0.82)}"/><rect x="0" y="${H - 24}" width="${W}" height="3" fill="${shade(w, 1.2)}"/>`;
-  } else if (st === 'stars') {
-    defs = `<pattern id="${pid}" width="70" height="60" patternUnits="userSpaceOnUse"><rect width="70" height="60" fill="${w}"/>`
-      + [[8, 9, 1.2, 0.9], [30, 20, 0.8, 0.6], [52, 7, 1, 0.8], [62, 38, 1.4, 0.9], [18, 44, 0.9, 0.7], [41, 52, 0.7, 0.5], [44, 32, 0.6, 0.5]].map(([x, y, r, o]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#f4ecc8" opacity="${o}"/>`).join('')
-      + `<path d="M24,30 l1,3 3,1 -3,1 -1,3 -1,-3 -3,-1 3,-1 Z" fill="#f2d36b"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/><rect x="0" y="${H - 14}" width="${W}" height="14" fill="${shade(w, 0.7)}"/>`;
-  } else if (st === 'shoji') {
-    const fr = '#6b4a33';
-    defs = `<pattern id="${pid}" width="24" height="30" patternUnits="userSpaceOnUse"><rect width="24" height="30" fill="${w}"/><rect width="24" height="30" fill="none" stroke="${fr}" stroke-width="1.6"/></pattern>`;
-    body = `<rect width="${W}" height="${H}" fill="url(#${pid})"/>`;
-    for (let x = 0; x <= W; x += 64) body += `<rect x="${x - 3}" y="0" width="6" height="${H}" fill="${fr}"/>`;
-    body += `<rect x="0" y="0" width="${W}" height="12" fill="${shade(fr, 0.85)}"/><rect x="0" y="${H - 32}" width="${W}" height="32" fill="${shade(fr, 1.1)}"/><rect x="0" y="${H - 34}" width="${W}" height="3" fill="${shade(fr, 0.7)}"/>`;
-  } else return null;
-  // Recortado al tamaño de la pared para que nada se salga por el borde
-  return { defs, body: `<svg width="${W}" height="${H}" overflow="hidden">${body}</svg>` };
-}
-
-function floorStyleSvg(room, N, uid, fa, fb) {
-  const st = room.floor, W = N * 32, pid = `${uid}fl-p`;
-  let defs = '', extra = '';
-  if (st === 'flagstone') {
-    defs = `<pattern id="${pid}" width="64" height="64" patternUnits="userSpaceOnUse"><rect width="64" height="64" fill="${fb}"/>`
-      + [[2, 2, 28, 28, 1], [34, 2, 28, 20, 0.94], [34, 24, 28, 8, 1.04], [-14, 34, 28, 28, 0.97], [18, 34, 28, 28, 1.05], [50, 34, 28, 28, 0.97]].map(([x, y, ww, hh, k]) => `<rect x="${x}" y="${y}" width="${ww}" height="${hh}" rx="3" fill="${shade(fa, k)}"/>`).join('') + '</pattern>';
-  } else if (st === 'terracotta') {
-    defs = `<pattern id="${pid}" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="16" height="16" fill="${fb}"/><rect x="0.8" y="0.8" width="14.4" height="14.4" fill="${fa}"/><rect x="2" y="2" width="5" height="1.2" fill="${shade(fa, 1.12)}"/></pattern>`;
-  } else if (st === 'tatami') {
-    const e = '#55623a';
-    defs = `<pattern id="${pid}" width="96" height="64" patternUnits="userSpaceOnUse"><rect width="96" height="64" fill="${e}"/>`
-      + `<rect x="1.5" y="1.5" width="61" height="29" fill="${fa}"/><rect x="65.5" y="1.5" width="29" height="61" fill="${shade(fa, 0.95)}"/><rect x="1.5" y="33.5" width="61" height="29" fill="${shade(fa, 1.04)}"/>`
-      + `<path d="M4,9 h56 M4,17 h56 M4,25 h56 M4,41 h56 M4,49 h56 M4,57 h56 M72,4 v56 M80,4 v56 M88,4 v56" stroke="${shade(fa, 0.9)}" stroke-width=".6"/></pattern>`;
-  } else if (st === 'moss') {
-    defs = `<pattern id="${pid}" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="${fa}"/><ellipse cx="10" cy="12" rx="8" ry="5" fill="${shade(fa, 0.9)}"/><ellipse cx="30" cy="28" rx="9" ry="6" fill="${shade(fa, 1.08)}"/><ellipse cx="28" cy="8" rx="4" ry="3" fill="${shade(fa, 0.94)}"/></pattern>`;
-    // Matas de hierba y florecillas (en vertical, sobre el suelo)
-    for (let i = 0; i < N * N * 1.5; i++) {
-      const gx = hashFrac('mx' + i) * N, gy = hashFrac('my' + i) * N;
-      const [x, y] = proj(gx, gy, 0);
-      if (i % 5 === 0) extra += `<circle cx="${f1(x)}" cy="${f1(y - 2)}" r="1.6" fill="${['#f7e7a6', '#f6c6d8', '#ffffff'][i % 3]}"/>`;
-      else extra += `<path d="M${f1(x)},${f1(y)} l-2.5,-5 M${f1(x)},${f1(y)} l0,-6.5 M${f1(x)},${f1(y)} l2.5,-5" stroke="${shade(fa, 0.7)}" stroke-width="1"/>`;
-    }
-  } else return null;
-  return `<defs>${defs}</defs><g transform="${floorM(0, 0, 0)}"><rect width="${W}" height="${W}" fill="url(#${pid})"/></g>${extra ? `<g>${extra}</g>` : ''}`;
 }
 
 // ---------- Objetos de los temas ----------

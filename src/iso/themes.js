@@ -21,7 +21,7 @@ export const THEMES = [
       f('table', 3, 4), f('pouf', 2, 4, { color: '#7a5230' }), f('pouf', 4, 4, { color: '#7a5230' }), f('candles', 5, 5), f('stack', 6, 4), f('cat', 1, 6, { color: '#7a6a5a' })],
   },
   {
-    id: 'castillo', label: 'Castillo medieval', desc: 'Piedra, estandartes, antorchas y un trono',
+    id: 'castillo', label: 'Castillo medieval', desc: 'Almenas, piedra, armaduras y un trono',
     wall: '#a39a8d', wallStyle: 'stone', floor: 'flagstone',
     items: [a('tapestry', 5, { color: '#6a2c3a' }), a('torch', 2), a('torch', 7), b('torch', 0), b('shield', 3, { color: '#2e4a7a' }),
       b('banner', 6, { color: '#8c2b3a' }), b('banner', 7, { color: '#2e4a7a' }), f('armor', 6, 0), f('armor', 0, 6),
@@ -35,20 +35,20 @@ export const THEMES = [
       f('fountain', 6, 3), f('bigplant', 7, 2), f('pouf', 1, 5, { color: '#f3c6d8' }), f('cat', 5, 3, { color: '#f4f1ec' })],
   },
   {
-    id: 'hadas', label: 'Bosque de hadas', desc: 'Musgo, setas, enredaderas y luciérnagas',
+    id: 'hadas', label: 'Bosque de hadas', desc: 'Al aire libre entre árboles, con setas y luciérnagas',
     wall: '#b7cfa9', wallStyle: 'leaves', floor: 'moss',
     items: [b('vines', 0), a('vines', 5), b('fireflies', 5), a('fireflies', 0), f('mushrooms', 6, 1, { color: '#d9443a' }),
       f('mushrooms', 1, 6, { color: '#e0a03a' }), f('mushrooms', 5, 6, { color: '#d9443a' }), f('roundrug', 2, 3, { color: '#d9c27a' }),
       f('armchair', 2, 3, { color: '#7aa06a' }), f('stump', 3, 4), f('stump', 6, 5), f('fern', 7, 0), f('bigplant', 6, 0), f('plant', 0, 1)],
   },
   {
-    id: 'botanica', label: 'Cúpula botánica', desc: 'Paredes de cristal, palmeras, helechos y fuente',
+    id: 'botanica', label: 'Cúpula botánica', desc: 'Invernadero de cristal con cúpula, palmeras y fuente',
     wall: '#e2efe9', wallStyle: 'glass', floor: 'terracotta',
     items: [b('vines', 0), a('vines', 5), f('palm', 6, 1), f('palm', 0, 6), f('bigplant', 3, 0), f('fern', 0, 1), f('fountain', 3, 3),
       f('bench', 4, 6), f('cactus', 7, 4), f('plant', 7, 6), f('fern', 6, 4), f('cat', 2, 5, { color: '#e0a15b' })],
   },
   {
-    id: 'mago', label: 'Torre del mago', desc: 'Cielo de estrellas, bola de cristal y caldero',
+    id: 'mago', label: 'Torre del mago', desc: 'Velas flotantes, círculo mágico y bola de cristal',
     wall: '#3d3454', wallStyle: 'stars', floor: 'darkwood',
     items: [b('archwindow', 6), a('stars', 5), b('stars', 0), a('candelabra', 1), b('candelabra', 3), a('wallshelf', 6, { color: '#5a3d2b' }),
       f('roundrug', 2, 3, { color: '#5a3d7a' }), f('armchair', 2, 3, { color: '#5a3d7a' }), f('crystalball', 3, 4), f('cauldron', 6, 4),

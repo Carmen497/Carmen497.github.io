@@ -261,7 +261,17 @@ body.reading #toast { bottom: 80px; }
 .bubble { transform-box: fill-box; transform-origin: center; animation: bubble 1.8s ease-in-out infinite; }
 .bubble.b1 { animation-delay: .6s; } .bubble.b2 { animation-delay: 1.2s; }
 @keyframes bubble { 0%,100% { transform: scale(.4); opacity: .3; } 50% { transform: scale(1.1); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .cat-tail, .steam, .flame, .twinkle, .glow, .water, .bubble { animation: none; } }
+.room-svg .float, .theme-card .float { animation: float 4s ease-in-out infinite; }
+@keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.petal { transform-box: fill-box; animation: petal 9s linear infinite; }
+@keyframes petal { 0% { transform: translate(0,-20px) rotate(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(40px,90px) rotate(300deg); opacity: 0; } }
+.ray { animation: ray 6s ease-in-out infinite; mix-blend-mode: screen; }
+@keyframes ray { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+.firefly { animation: firefly 6s ease-in-out infinite; }
+@keyframes firefly { 0%,100% { transform: translate(0,0); opacity: .3; } 30% { opacity: 1; } 50% { transform: translate(8px,-10px); opacity: .9; } 75% { transform: translate(-6px,-4px); opacity: .4; } }
+.rune { animation: rune 4s ease-in-out infinite; }
+@keyframes rune { 0%,100% { opacity: .65; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .cat-tail, .steam, .flame, .twinkle, .glow, .water, .bubble, .float, .petal, .ray, .firefly, .rune { animation: none; } }
 
 .room-overlay {
   position: absolute; left: 0; right: 0; bottom: calc(var(--nav-h) + var(--safe-b)); pointer-events: none;
