@@ -3,6 +3,7 @@ import { h, icon, closeTopSheet, toast } from './ui.js';
 import { getAppSettings, migrateGenresToTags } from './store.js';
 import { processInbox, setupLaunchQueue, setupDropZone } from './importer.js';
 import { backupToDrive, driveTokenValid, needsBackup } from './backup.js';
+import { goTab, openReader } from './nav.js';
 
 export const APP_VERSION = __APP_VERSION__;
 
@@ -16,7 +17,7 @@ const TABS = [
   ['#/estadisticas', 'stats', 'Estadísticas'],
   ['#/ajustes', 'settings', 'Ajustes'],
 ];
-for (const [href, ic, label] of TABS) navBar.append(h('a', { href, class: 'nav-item' }, icon(ic, 22), h('span', {}, label)));
+for (const [href, ic, label] of TABS) navBar.append(h('a', { href, class: 'nav-item', onclick: (e) => { e.preventDefault(); goTab(href); } }, icon(ic, 22), h('span', {}, label)));
 
 // ---- Tema de la app ----
 export function applyAppTheme(pref) {
@@ -57,7 +58,7 @@ async function doRoute() {
   else if (mod.renderSettings) await mod.renderSettings(main);
   else {
     main.className = 'library-main';
-    cleanup = await mod.renderLibrary(main, (to) => { location.hash = to; });
+    cleanup = await mod.renderLibrary(main, (to) => { const m = to.match(/^#\/leer\/(.+)$/); if (m) openReader(decodeURIComponent(m[1])); else goTab(to); });
     maybeAutoBackup();
     applyPendingUpdate();
   }

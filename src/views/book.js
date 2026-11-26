@@ -1,4 +1,5 @@
 // Ficha del libro: valoración, estado, #, saga, estantería, sinopsis y notas.
+import { openReader } from '../nav.js';
 import { h, icon, btn, sheet, stars, toast, confirmDialog, promptDialog, closeAllSheets, fmtDuration, escapeHtml } from '../ui.js';
 import { getBook, putBook, deleteBook, getBooks, getFile } from '../db.js';
 import { allTags, addTag, tagKey, getRoom, coverUrl, colorFromImage, shrinkImage } from '../store.js';
@@ -82,7 +83,7 @@ export async function openBook(id, { onChange } = {}) {
         stars(book.rating || 0, (v) => { book.rating = v; save(); }),
         h('div', { class: 'progress' }, h('div', { class: 'progress-fill', style: { width: `${pct}%` } })),
         h('div', { class: 'muted small' }, `${pct}% leído · ${fmtDuration(book.readSeconds)} de lectura${book.pages ? ` · ~${book.pages} págs.` : ''}`),
-        btn([icon('book', 18), pct > 0 && pct < 100 ? ' Seguir leyendo' : ' Leer'], () => { closeAllSheets(); location.hash = `#/leer/${book.id}`; }, 'primary'))));
+        btn([icon('book', 18), pct > 0 && pct < 100 ? ' Seguir leyendo' : ' Leer'], () => { closeAllSheets(); openReader(book.id); }, 'primary'))));
 
     // Estado
     const statusRow = h('div', { class: 'chips' }, STATUS.map(([v, l]) =>

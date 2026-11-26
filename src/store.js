@@ -174,11 +174,13 @@ export async function shelves() {
 
 // ---- Estanterías automáticas ----
 // Una estantería puede guardar los libros que tú pones (auto = '') o enseñar sola los que cumplen una regla.
+// Empezado: con algo leído (o marcado «Leyendo») y sin terminar ni abandonar
+export const isStarted = (b) => b.status !== 'leido' && b.status !== 'abandonado' && (b.status === 'leyendo' || ((b.progress || 0) > 0.005 && (b.progress || 0) < 0.99));
 export const AUTO_RULES = [
   ['', 'Los libros que yo ponga'],
   ['nuevos', 'Libros nuevos (todos los #)'],
   ['pendiente', 'Pendientes (sin terminar)'],
-  ['leyendo', 'Leyendo ahora'],
+  ['leyendo', 'Empezados (leyendo ahora)'],
   ['leido', 'Leídos'],
   ['favoritos', 'Favoritos (4 ★ o más)'],
   ['saga', 'Libros de sagas'],
@@ -191,7 +193,7 @@ function matchesRule(b, auto) {
   switch (auto) {
     case 'nuevos': return !!b.nuevo;
     case 'pendiente': return b.status !== 'leido' && b.status !== 'abandonado';
-    case 'leyendo': return b.status === 'leyendo';
+    case 'leyendo': return isStarted(b);
     case 'leido': return b.status === 'leido';
     case 'favoritos': return (b.rating || 0) >= 4;
     case 'saga': return !!b.saga;

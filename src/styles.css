@@ -555,3 +555,8 @@ body.dragging::after {
 .tag-chip { display: inline-flex; align-items: center; gap: 2px; padding: 5px 4px 5px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 600; font-size: .92rem; }
 .tag-x { width: 26px; height: 26px; border-radius: 50%; font-size: 1.1rem; line-height: 1; color: inherit; opacity: .8; }
 .tag-sugg:empty { display: none; }
+
+/* ---------- Libros empezados ---------- */
+.started-btn { display: flex; margin: 8px auto 0; }
+.started-row { display: flex; align-items: center; gap: 6px; }
+.started-row .continue-card.flat { box-shadow: none; background: var(--bg-soft, rgba(0,0,0,.04)); max-width: none; }

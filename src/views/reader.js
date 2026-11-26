@@ -1,5 +1,6 @@
 // Lector EPUB con ajustes de lectura, barra de estado y registro de estadísticas.
 import ePub, { EpubCFI } from 'epubjs';
+import { leaveReader } from '../nav.js';
 import { h, icon, iconBtn, btn, sheet, toast, stars, fmtDuration, todayKey, closeAllSheets } from '../ui.js';
 import { getBook, putBook, getFile, putFile, addDay } from '../db.js';
 import { repairEpub, REPAIR_VERSION } from '../epubfix.js';
@@ -121,7 +122,7 @@ function userCss(s) {
 export async function renderReader(root, bookId) {
   const book = await getBook(bookId);
   let file = await getFile(bookId);
-  if (!book || !file) { toast('No se encontró el libro'); location.hash = '#/'; return; }
+  if (!book || !file) { toast('No se encontró el libro'); location.replace('#/'); return; }
   // Una vez por libro: quitar caracteres que impiden abrir capítulos (PDF convertidos antes)
   if (book.xmlOk !== REPAIR_VERSION) {
     try {
@@ -853,7 +854,7 @@ export async function renderReader(root, bookId) {
     clearTimeout(saveTimer);
     await putBook(book);
     closeAllSheets();
-    location.hash = '#/';
+    leaveReader();
   }
 
   // Tamaño fijo de la página: se queda con el mayor visto (el de pantalla completa). Si el móvil

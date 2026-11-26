@@ -2,7 +2,7 @@
 import { h, icon, iconBtn, btn, toast, sheet, promptDialog, confirmDialog, escapeHtml } from '../ui.js';
 import { getBooks, putBook } from '../db.js';
 import {
-  getRoom, saveRoom, allTags, hasTag, tagKey, getAppSettings, saveAppSettings, sortBooksForShelf, coverUrl, booksForShelves, LIST_GROUPS, LIST_SORTS,
+  getRoom, saveRoom, allTags, hasTag, tagKey, isStarted, getAppSettings, saveAppSettings, sortBooksForShelf, coverUrl, booksForShelves, LIST_GROUPS, LIST_SORTS,
 } from '../store.js';
 import {
   renderRoom, roomViewBox, screenToFloor, screenToWall, CATALOG, catalogOf, canPlace, canPlaceWall,
@@ -239,8 +239,8 @@ async function roomView(container, nav) {
   async function renderContinue() {
     continueCard.innerHTML = '';
     if (edit) return;
-    const reading = books.filter((b) => b.status === 'leyendo' || (b.progress > 0 && b.progress < 0.99 && b.status !== 'leido'))
-      .sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0))[0];
+    const started = books.filter(isStarted).sort((a, b) => (b.lastOpenedAt || 0) - (a.lastOpenedAt || 0));
+    const reading = started[0];
     if (!reading) {
       if (!books.length) {
         continueCard.append(h('div', { class: 'continue-card empty' },
@@ -257,6 +257,23 @@ async function roomView(container, nav) {
         h('strong', {}, reading.title),
         h('div', { class: 'progress thin' }, h('div', { class: 'progress-fill', style: { width: `${Math.round((reading.progress || 0) * 100)}%` } }))),
       h('span', { class: 'cc-pct' }, `${Math.round((reading.progress || 0) * 100)}%`)));
+    if (started.length > 1) {
+      continueCard.append(h('button', { class: 'pill started-btn', onclick: () => showStarted(started) }, icon('book', 16), `Ver mis ${started.length} libros empezados`));
+    }
+  }
+  function showStarted(list) {
+    const s = sheet(h('div', { class: 'stack' }, list.map((b) => {
+      const url = coverUrl(b), pct = Math.round((b.progress || 0) * 100);
+      return h('div', { class: 'started-row' },
+        h('button', { class: 'continue-card flat', onclick: () => { s.close(); nav(`#/leer/${b.id}`); } },
+          url ? h('img', { src: url, alt: '' }) : h('div', { class: 'mini-cover', style: { background: b.spineColor } }),
+          h('div', { class: 'cc-text' },
+            h('strong', {}, b.title),
+            h('span', { class: 'muted small' }, b.author || ''),
+            h('div', { class: 'progress thin' }, h('div', { class: 'progress-fill', style: { width: `${pct}%` } }))),
+          h('span', { class: 'cc-pct' }, `${pct}%`)),
+        iconBtn('more', () => { s.close(); openBook(b.id, { nav }); }, 'Ficha del libro'));
+    })), { title: 'Libros empezados', tall: true });
   }
   renderContinue();
 
@@ -414,7 +431,7 @@ async function listView(container, nav) {
 
   function renderChips() {
     chips.innerHTML = '';
-    const opts = [['all', 'Todos'], ...(books.some((b) => b.nuevo) ? [['nuevos', `Nuevos · ${books.filter((b) => b.nuevo).length}`]] : []), ['leyendo', 'Leyendo'], ['pendiente', 'Pendientes'], ['leido', 'Leídos'], ...tags.map((t) => ['t:' + t.name, '#' + t.name])];
+    const opts = [['all', 'Todos'], ...(books.some((b) => b.nuevo) ? [['nuevos', `Nuevos · ${books.filter((b) => b.nuevo).length}`]] : []), ...(books.some(isStarted) ? [['leyendo', `Empezados · ${books.filter(isStarted).length}`]] : []), ['pendiente', 'Pendientes'], ['leido', 'Leídos'], ...tags.map((t) => ['t:' + t.name, '#' + t.name])];
     for (const [id, label] of opts) {
       chips.append(h('button', { class: `chip ${filter === id ? 'on' : ''}`, onclick: () => { filter = id; app.listFilter = id; saveAppSettings(app); renderChips(); draw(); } }, label));
     }
@@ -422,7 +439,7 @@ async function listView(container, nav) {
 
   function draw() {
     list.innerHTML = '';
-    let arr = books.filter((b) => filter === 'all' || (filter === 'nuevos' ? b.nuevo : filter.startsWith('t:') ? hasTag(b, tagKey(filter.slice(2))) : b.status === filter));
+    let arr = books.filter((b) => filter === 'all' || (filter === 'nuevos' ? b.nuevo : filter === 'leyendo' ? isStarted(b) : filter.startsWith('t:') ? hasTag(b, tagKey(filter.slice(2))) : b.status === filter));
     const cmp = {
       recent: (a, b) => (b.lastOpenedAt || b.addedAt) - (a.lastOpenedAt || a.addedAt),
       added: (a, b) => (b.addedAt || 0) - (a.addedAt || 0),
