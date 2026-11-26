@@ -6,8 +6,9 @@ import {
 } from '../store.js';
 import {
   renderRoom, roomViewBox, screenToFloor, screenToWall, CATALOG, catalogOf, canPlace, canPlaceWall,
-  footprint, itemPreview, FLOOR_OPTIONS, WALL_OPTIONS, SEASONS, activeSeasons,
+  footprint, itemPreview, FLOOR_OPTIONS, WALL_OPTIONS, WALL_STYLES, SEASONS, GROUPS, activeSeasons,
 } from '../iso/room.js';
+import { THEMES, themeById, applyTheme, restorePrevDecor, themeSampleRoom } from '../iso/themes.js';
 import { pickFiles } from '../importer.js';
 import { openShelf } from './shelf.js';
 import { openBook } from './book.js';
@@ -50,6 +51,10 @@ export async function renderLibrary(root, nav) {
 // ---------------------------------------------------------------------------
 // Sala isométrica
 // ---------------------------------------------------------------------------
+// Libros de muestra para las miniaturas de las salas decoradas
+const SAMPLE_COLORS = ['#8c3b3b', '#3f6e8c', '#6b7d4a', '#a0773f', '#5d4a7a', '#2f5d50', '#c25b7a'];
+const SAMPLE_BOOKS = Object.fromEntries(['shelf-1', 'shelf-2', 'shelf-3'].map((id, k) => [id, Array.from({ length: 22 + k * 5 }, (_, i) => ({ id: id + i, spineColor: SAMPLE_COLORS[(i * 3 + k) % 7] }))]));
+
 async function roomView(container, nav) {
   const room = await getRoom();
   let books = await getBooks();
@@ -323,14 +328,14 @@ async function roomView(container, nav) {
         actions);
       return;
     }
-    // Pestañas: muebles de siempre y, si toca, la decoración de temporada (Navidad, Halloween…)
-    const seasons = activeSeasons();
-    if (palTab !== 'muebles' && !seasons.includes(palTab)) palTab = 'muebles';
-    const tabs = seasons.length ? h('div', { class: 'chips pal-tabs' },
-      [['muebles', 'Muebles'], ...seasons.map((k) => [k, `${SEASONS[k].emoji} ${SEASONS[k].label}`])].map(([k, l]) =>
-        h('button', { class: `chip ${palTab === k ? 'on' : ''}`, onclick: () => { palTab = k; placing = null; renderEditBar(); } }, l))) : null;
+    // Pestañas: muebles de siempre, los de cada tema (castillo, cuento…) y, si toca, la decoración de temporada
+    const seasons = activeSeasons(), groups = Object.keys(GROUPS);
+    if (palTab !== 'muebles' && !seasons.includes(palTab) && !groups.includes(palTab)) palTab = 'muebles';
+    const tabs = h('div', { class: 'chips scroll pal-tabs' },
+      [...seasons.map((k) => [k, `${SEASONS[k].emoji} ${SEASONS[k].label}`]), ['muebles', 'Muebles'], ...groups.map((k) => [k, GROUPS[k]])].map(([k, l]) =>
+        h('button', { class: `chip ${palTab === k ? 'on' : ''}`, onclick: () => { palTab = k; placing = null; renderEditBar(); } }, l)));
     const palette = h('div', { class: 'palette' });
-    for (const c of CATALOG.filter((x) => (x.season || 'muebles') === palTab)) {
+    for (const c of CATALOG.filter((x) => (x.season || x.group || 'muebles') === palTab)) {
       const pv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       pv.innerHTML = itemPreview(c.type);
       const b = h('button', { class: `pal-item ${placing?.type === c.type ? 'on' : ''}`, onclick: () => { placing = placing?.type === c.type ? null : c; renderEditBar(); if (placing) toast(c.wall ? 'Toca una pared para colgarlo' : 'Toca el suelo para colocarlo'); } }, pv, h('span', {}, c.label));
@@ -341,9 +346,11 @@ async function roomView(container, nav) {
         h('strong', {}, placing ? `Colocar: ${placing.label}` : 'Decorar'),
         h('span', { class: 'muted small' }, placing ? 'Toca dónde quieres ponerlo' : 'Toca un objeto para editarlo'),
         h('div', { class: 'row gap' },
+          h('button', { class: 'pill', onclick: themesSheet }, icon('room', 18), 'Temas'),
           h('button', { class: 'pill', onclick: roomOptions }, icon('settings', 18), 'Sala'),
           btn('Terminar', () => setEdit(false), 'primary small'))),
       tabs, palette);
+    requestAnimationFrame(() => { const on = tabs.querySelector('.on'); if (on) tabs.scrollLeft = on.offsetLeft - tabs.clientWidth / 2 + on.offsetWidth / 2; });
     // Ajustar el encuadre de las miniaturas una vez en pantalla
     requestAnimationFrame(() => palette.querySelectorAll('svg').forEach((s) => {
       try { const bb = s.getBBox(); s.setAttribute('viewBox', `${bb.x - 3} ${bb.y - 3} ${bb.width + 6} ${bb.height + 6}`); } catch {}
@@ -387,6 +394,7 @@ async function roomView(container, nav) {
 
   function roomOptions() {
     const body = h('div', { class: 'stack' });
+    body.append(h('button', { class: 'pill', onclick: () => { s.close(); themesSheet(); } }, icon('room', 18), 'Elegir una sala ya decorada'));
     body.append(h('label', { class: 'label' }, 'Color de las paredes'));
     const walls = h('div', { class: 'swatches' });
     for (const c of WALL_OPTIONS) walls.append(h('button', { class: `swatch ${room.wall === c ? 'on' : ''}`, style: { background: c }, onclick: () => { room.wall = c; saveRoom(room); draw(); s.close(); roomOptions(); } }));
@@ -394,6 +402,10 @@ async function roomView(container, nav) {
     custom.addEventListener('change', () => { room.wall = custom.value; saveRoom(room); draw(); });
     walls.append(h('label', { class: 'swatch custom' }, custom, '+'));
     body.append(walls);
+    body.append(h('label', { class: 'label' }, 'Pared'));
+    const wstyles = h('div', { class: 'chips' });
+    for (const w of WALL_STYLES) wstyles.append(h('button', { class: `chip ${(room.wallStyle || 'plain') === w.id ? 'on' : ''}`, onclick: () => { room.wallStyle = w.id; saveRoom(room); draw(); s.close(); roomOptions(); } }, w.label));
+    body.append(wstyles);
     body.append(h('label', { class: 'label' }, 'Suelo'));
     const floors = h('div', { class: 'chips' });
     for (const f of FLOOR_OPTIONS) floors.append(h('button', { class: `chip ${room.floor === f.id ? 'on' : ''}`, onclick: () => { room.floor = f.id; saveRoom(room); draw(); s.close(); roomOptions(); } }, f.label));
@@ -414,6 +426,40 @@ async function roomView(container, nav) {
       Object.assign(base, roomViewBox(n));
       view = { cx: base.x + base.w / 2, cy: base.y + base.h / 2, scale: 1 };
       draw(); s.close(); roomOptions();
+    }
+  }
+
+  // Salas ya decoradas: cambian paredes, suelo y adornos; las estanterías y los libros no se tocan
+  function themesSheet() {
+    const body = h('div', { class: 'stack' });
+    body.append(h('p', { class: 'muted small' }, 'Elige una sala ya decorada. Tus estanterías y tus libros se quedan como están, y después puedes añadir, mover o quitar lo que quieras.'));
+    if (room.prevDecor) {
+      const prev = themeById(room.prevDecor.theme);
+      body.append(h('button', { class: 'pill', onclick: async () => {
+        restorePrevDecor(room); await saveRoom(room); s.close(); draw(); renderEditBar();
+        toast('Has vuelto a la decoración anterior');
+      } }, icon('rotate', 18), prev ? `Volver a la anterior (${prev.label})` : 'Volver a la decoración anterior'));
+    }
+    const grid = h('div', { class: 'theme-grid' });
+    for (const t of THEMES) {
+      const pv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      const sample = themeSampleRoom(t);
+      const vb = roomViewBox(8);
+      pv.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+      pv.innerHTML = renderRoom(sample, SAMPLE_BOOKS, { labels: false, uid: 'th-' + t.id + '-' });
+      const on = room.theme === t.id;
+      grid.append(h('button', { class: `theme-card ${on ? 'on' : ''}`, onclick: () => pick(t) }, pv,
+        h('strong', {}, t.label), h('span', { class: 'muted small' }, on ? 'Es la que tienes ahora' : t.desc)));
+    }
+    body.append(grid);
+    const s = sheet(body, { title: 'Salas decoradas', tall: true });
+    async function pick(t) {
+      const decor = room.items.filter((i) => i.type !== 'shelf').length;
+      if (decor && !(await confirmDialog(`¿Decorar la sala como «${t.label}»? Se cambian las paredes, el suelo y los adornos que tienes ahora. Tus estanterías y tus libros se quedan igual, y podrás volver a la decoración actual desde aquí.`, { ok: 'Usar esta sala' }))) return;
+      applyTheme(room, t);
+      await saveRoom(room);
+      s.close(); draw(); renderEditBar();
+      toast(`Sala «${t.label}» lista`);
     }
   }
 
